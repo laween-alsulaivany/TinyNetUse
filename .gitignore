@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+.config.json
+dist/
+build/
+*.spec
+*.db
+*.sqlite
+*.json.bak
+/tests
+.venv/

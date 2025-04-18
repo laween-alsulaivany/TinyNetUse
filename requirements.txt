@@ -1,0 +1,8 @@
+customtkinter
+psutil
+Pillow
+win10toast
+matplotlib  # optional, for graphing
+pystray
+Pillow
+pyinstaller
