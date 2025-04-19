@@ -1,22 +1,24 @@
+# config.py
+
 import json
 import os
 
 DEFAULTS = {
     "update_interval": 1.0,
-    "interface": "All",
-    "unit": "auto",         # "auto", "KB/s", "MB/s"
-    "precision": 1,         # 0,1,2
-    "theme": "dark",        # "light" or "dark"
-    "font": "Helvetica",
+    "unit": "auto",
+    "precision": 1,
+    "font": "Segoe UI",
     "font_size": 10,
-    "always_on_top": True,
-    "opacity": 0.9,
-    "geometry": None,
+    "graph_always_on_top": False,
+    "net_always_on_top": True,
+    "opacity": 0.8,
+    "widget_geometry": [100, 100, 300, 120],
+    "graph_geometry": [100, 100, 300, 120],
     "start_minimized": False,
     "start_on_boot": False,
-    "notify_threshold": {"download": None, "upload": None}
+    "notify_threshold": {"download": None},
+    "locked": False
 }
-
 
 class Config:
     def __init__(self, path="config.json"):
@@ -27,7 +29,6 @@ class Config:
         else:
             with open(path, "r") as f:
                 self.data = json.load(f)
-            # fill missing defaults
             for k, v in DEFAULTS.items():
                 self.data.setdefault(k, v)
 

@@ -6,3 +6,5 @@ matplotlib  # optional, for graphing
 pystray
 Pillow
 pyinstaller
+PyQt5
+pyqtgraph
