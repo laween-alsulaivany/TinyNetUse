@@ -2,7 +2,7 @@ customtkinter
 psutil
 Pillow
 win10toast
-matplotlib  # optional, for graphing
+matplotlib
 pystray
 Pillow
 pyinstaller

@@ -1,0 +1,37 @@
+{
+  "update_interval": 0.1,
+  "unit": "MB/s",
+  "precision": 2,
+  "font": "Segoe UI",
+  "font_size": 10,
+  "opacity": 1.0,
+  "widget_geometry": [
+    1159,
+    981,
+    116,
+    68
+  ],
+  "graph_geometry": [
+    271,
+    959,
+    200,
+    100
+  ],
+  "start_minimized": false,
+  "start_on_boot": false,
+  "notify_threshold": {
+    "download": 2.0
+  },
+  "widget_locked": false,
+  "widget_always_on_top": true,
+  "graph_locked": false,
+  "graph_always_on_top": true,
+  "alert_color": "#ff3f1d",
+  "download_color": "#ff8a65",
+  "upload_color": "#4fc3f7",
+  "font_color": "#ffffff",
+  "font_bold": false,
+  "graph_minimal_mode": true,
+  "graph_visible": true,
+  "graph_history": 60
+}

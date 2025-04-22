@@ -4,20 +4,28 @@ import json
 import os
 
 DEFAULTS = {
-    "update_interval": 1.0,
-    "unit": "auto",
-    "precision": 1,
     "font": "Segoe UI",
     "font_size": 10,
-    "graph_always_on_top": False,
-    "net_always_on_top": True,
+    "font_color": "#FFFFFF",
+    "font_bold": False,
+    "widget_geometry": None,
+    "widget_locked": False,
+    "widget_always_on_top": True,
+    "graph_visible": False,
+    "graph_geometry": None,
+    "graph_locked": False,
+    "graph_always_on_top": True,
+    "graph_history": 60,
+    "update_interval": 1.0,
     "opacity": 0.8,
-    "widget_geometry": [100, 100, 300, 120],
-    "graph_geometry": [100, 100, 300, 120],
-    "start_minimized": False,
-    "start_on_boot": False,
+    "alert_color": "#FF5555",
+    "download_color": "#4FC3F7",
+    "upload_color": "#FF8A65",
+    "unit": "auto",
+    "precision": 1,
     "notify_threshold": {"download": None},
-    "locked": False
+    "start_on_boot": False
+
 }
 
 class Config:
