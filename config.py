@@ -1,7 +1,8 @@
-# config.py
+# config.py — Loads and saves config.json. Provides DEFAULTS and the Config class.
 
 import json
-import os
+import sys
+from pathlib import Path
 
 DEFAULTS = {
     "font": "Segoe UI",
@@ -24,19 +25,32 @@ DEFAULTS = {
     "unit": "auto",
     "precision": 1,
     "notify_threshold": {"download": None},
-    "start_on_boot": False
-
+    "start_on_boot": False,
 }
 
+
+def _config_path() -> Path:
+    # Frozen (PyInstaller --onefile): _MEIPASS is a temp dir that gets wiped on exit,
+    # so we put config next to the exe instead. Script mode: next to this file.
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / "config.json"
+    return Path(__file__).parent / "config.json"
+
+
 class Config:
-    def __init__(self, path="config.json"):
-        self.path = path
-        if not os.path.exists(path):
+    def __init__(self, path=None):
+        self.path = Path(path) if path else _config_path()
+        if not self.path.exists():
             self.data = DEFAULTS.copy()
             self.save()
         else:
-            with open(path, "r") as f:
-                self.data = json.load(f)
+            try:
+                with open(self.path, "r") as f:
+                    self.data = json.load(f)
+            except json.JSONDecodeError:
+                # Corrupt config (bad manual edit, truncated write, etc.) - start fresh.
+                # The broken file gets overwritten on the next save.
+                self.data = DEFAULTS.copy()
             for k, v in DEFAULTS.items():
                 self.data.setdefault(k, v)
 
