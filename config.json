@@ -17,7 +17,6 @@
     200,
     100
   ],
-  "start_minimized": false,
   "start_on_boot": false,
   "notify_threshold": {
     "download": 2.0
@@ -31,7 +30,6 @@
   "upload_color": "#4fc3f7",
   "font_color": "#ffffff",
   "font_bold": false,
-  "graph_minimal_mode": true,
   "graph_visible": true,
   "graph_history": 60
 }
