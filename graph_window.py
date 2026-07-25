@@ -1,8 +1,12 @@
-# graph_window.py
+# graph_window.py — Floating dialog that draws a rolling network speed history graph.
 
+from collections import deque
+import time
+
+import psutil
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import QRectF, Qt
-import psutil
+
 from config import Config
 
 
@@ -19,8 +23,7 @@ class GraphWindow(QtWidgets.QDialog):
         self.setWindowTitle("Network Usage Graph")
         self.resize(600, 320)
         base = Qt.FramelessWindowHint | Qt.Dialog
-        flags = base | (Qt.WindowStaysOnTopHint if d.get(
-            "graph_always_on_top") else 0)
+        flags = base | (Qt.WindowStaysOnTopHint if d.get("graph_always_on_top") else 0)
 
         # Match main widget opacity
         self.setWindowOpacity(d.get("opacity", 1.0))
@@ -46,14 +49,11 @@ class GraphWindow(QtWidgets.QDialog):
         self.line_ul = QtGui.QColor(d.get("upload_color", "#FF8A65"))
         cnt = psutil.net_io_counters()
         self.last_sent, self.last_recv = cnt.bytes_sent, cnt.bytes_recv
-        self.sent_hist = [0.0] * self.max_history
-        self.recv_hist = [0.0] * self.max_history
+        self.sent_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
+        self.recv_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.last_dl = 0.0
         self.last_ul = 0.0
         self.auto_scale = True
-
-        # ── Controls Bar ──
-        self._build_controls()
 
         # ── Timer ──
         self.timer = QtCore.QTimer(self)
@@ -68,34 +68,12 @@ class GraphWindow(QtWidgets.QDialog):
         # ── Apply Settings ──
         self.apply_settings()
 
-    def _build_controls(self):
-        self.controls = QtWidgets.QWidget(self)
-        self.controls.setFixedHeight(32)
-        h = QtWidgets.QHBoxLayout(self.controls)
-        h.setContentsMargins(8, 4, 8, 4)
-        h.setSpacing(8)
-
-        v = QtWidgets.QVBoxLayout(self)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        v.addWidget(self.controls)
-        self.setLayout(v)
-
     def _dock_bottom_right(self):
         ag = QtWidgets.QApplication.primaryScreen().availableGeometry()
         w, h = self.width(), self.height()
         x = ag.right() - w - 10
         y = ag.bottom() - h - 10
         self.setGeometry(x, y, w, h)
-
-    def _toggle_scale(self, state):
-        self.auto_scale = bool(state)
-        self.scale_spin.setEnabled(not self.auto_scale)
-        self.update()
-
-    def _manual_scale_changed(self, val):
-        self.manual_scale = val
-        self.update()
 
     def _swap_colors(self):
         self.line_dl, self.line_ul = self.line_ul, self.line_dl
@@ -105,30 +83,38 @@ class GraphWindow(QtWidgets.QDialog):
         self.update()
 
     def _update(self):
+        now = time.time()
+        elapsed = now - getattr(self, "_last_update_time", now)
+        self._last_update_time = now
+
+        if elapsed == 0:
+            return
+
         cnt = psutil.net_io_counters()
         raw_sent = cnt.bytes_sent - self.last_sent
         raw_recv = cnt.bytes_recv - self.last_recv
         self.last_sent, self.last_recv = cnt.bytes_sent, cnt.bytes_recv
 
-        # Convert to appropriate unit
+        # Divide by elapsed so the graph shows per-second rates, not per-tick volumes.
+        sent_bps = raw_sent / elapsed
+        recv_bps = raw_recv / elapsed
+
         if self.unit == "KB/s":
-            sent = raw_sent / (1 << 10)
-            recv = raw_recv / (1 << 10)
+            sent = sent_bps / (1 << 10)
+            recv = recv_bps / (1 << 10)
         elif self.unit == "MB/s":
-            sent = raw_sent / (1 << 20)
-            recv = raw_recv / (1 << 20)
-        else:  # Default to MB/s
-            sent = raw_sent / (1 << 20)
-            recv = raw_recv / (1 << 20)
+            sent = sent_bps / (1 << 20)
+            recv = recv_bps / (1 << 20)
+        else:  # auto and bit-based units: use MB/s scale for the graph
+            sent = sent_bps / (1 << 20)
+            recv = recv_bps / (1 << 20)
 
         self.last_ul = sent
         self.last_dl = recv
 
+        # deque handles the max_history cap automatically
         self.sent_hist.append(sent)
         self.recv_hist.append(recv)
-        if len(self.sent_hist) > self.max_history:
-            self.sent_hist.pop(0)
-            self.recv_hist.pop(0)
         self.update()
 
     def paintEvent(self, event):
@@ -142,15 +128,14 @@ class GraphWindow(QtWidgets.QDialog):
         painter.fillPath(path, self.bg_color)
 
         # Dynamic margins and scaling based on window size
-        base_margin = max(8, min(rect.width(), rect.height())
-                          * 0.02)
+        base_margin = max(8, min(rect.width(), rect.height()) * 0.02)
         oy = base_margin
         h = rect.height() - 2 * base_margin
         w = rect.width() - 2 * base_margin
         ox = base_margin
 
         # Choose scale
-        all_vals = self.sent_hist + self.recv_hist
+        all_vals = list(self.sent_hist) + list(self.recv_hist)
         maxv = max(max(all_vals, default=0.0), 0.001) * 1.2
 
         # Dynamic line thickness (1 to 3 pixels)
@@ -162,7 +147,7 @@ class GraphWindow(QtWidgets.QDialog):
             painter.setPen(QtGui.QPen(color, line_thickness))
             points = []
             for i, v in enumerate(data):
-                x = ox + i * (w / (len(data)-1))
+                x = ox + i * (w / (len(data) - 1))
                 y = oy + h - (v / maxv) * h
                 points.append(QtCore.QPointF(x, y))
             if len(points) > 1:
@@ -173,8 +158,7 @@ class GraphWindow(QtWidgets.QDialog):
 
         # Dynamic font size (6 to 12 points)
         font_size = max(6, min(12, rect.width() * 0.02))  # 2% of width
-        font = QtGui.QFont(self.config.data.get(
-            "font", "Segoe UI"), int(font_size))
+        font = QtGui.QFont(self.config.data.get("font", "Segoe UI"), int(font_size))
         font.setBold(self.config.data.get("font_bold", False))
         painter.setFont(font)
 
@@ -188,10 +172,8 @@ class GraphWindow(QtWidgets.QDialog):
         ul_label = f"↑ {self.last_ul:.{precision}f} {self.unit}"
 
         # Draw download speed (left side)
-        painter.setPen(QtGui.QPen(
-            self.line_dl, dash_thickness, QtCore.Qt.DashLine))
-        painter.drawLine(QtCore.QPointF(ox, y_dl),
-                         QtCore.QPointF(ox + w, y_dl))
+        painter.setPen(QtGui.QPen(self.line_dl, dash_thickness, QtCore.Qt.DashLine))
+        painter.drawLine(QtCore.QPointF(ox, y_dl), QtCore.QPointF(ox + w, y_dl))
         dl_rect = painter.fontMetrics().boundingRect(dl_label)
         dl_rect.adjust(-4, -2, 4, 2)
         dl_rect.moveTo(int(ox), int(y_dl - dl_rect.height() - 2))
@@ -200,14 +182,11 @@ class GraphWindow(QtWidgets.QDialog):
         painter.drawText(dl_rect, Qt.AlignCenter, dl_label)
 
         # Draw upload speed (right side)
-        painter.setPen(QtGui.QPen(
-            self.line_ul, dash_thickness, QtCore.Qt.DashLine))
-        painter.drawLine(QtCore.QPointF(ox, y_ul),
-                         QtCore.QPointF(ox + w, y_ul))
+        painter.setPen(QtGui.QPen(self.line_ul, dash_thickness, QtCore.Qt.DashLine))
+        painter.drawLine(QtCore.QPointF(ox, y_ul), QtCore.QPointF(ox + w, y_ul))
         ul_rect = painter.fontMetrics().boundingRect(ul_label)
         ul_rect.adjust(-4, -2, 4, 2)
-        ul_rect.moveTo(int(ox + w - ul_rect.width()),
-                       int(y_ul - ul_rect.height() - 2))
+        ul_rect.moveTo(int(ox + w - ul_rect.width()), int(y_ul - ul_rect.height() - 2))
         painter.fillRect(ul_rect, QtGui.QColor(0, 0, 0, 180))
         painter.setPen(QtGui.QPen(self.line_ul))
         painter.drawText(ul_rect, Qt.AlignCenter, ul_label)
@@ -220,14 +199,15 @@ class GraphWindow(QtWidgets.QDialog):
         painter.setPen(QtGui.QPen(QtGui.QColor("#aaa")))
         grip_size = max(8, min(16, rect.width() * 0.03))
         for i in range(4, int(grip_size), 4):
-            painter.drawLine(self.width()-i, self.height(),
-                             self.width(), self.height()-i)
+            painter.drawLine(
+                self.width() - i, self.height(), self.width(), self.height() - i
+            )
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
             pos = e.pos()
             grip = 16
-            if pos.x() > self.width()-grip and pos.y() > self.height()-grip:
+            if pos.x() > self.width() - grip and pos.y() > self.height() - grip:
                 self._resizing = True
                 self._resize_start = (e.globalPos(), self.geometry())
             else:
@@ -236,14 +216,14 @@ class GraphWindow(QtWidgets.QDialog):
     def mouseMoveEvent(self, e):
         grip_size = 16
         in_grip_area = (
-            self.width() - grip_size < e.x() < self.width() and
-            self.height() - grip_size < e.y() < self.height()
+            self.width() - grip_size < e.x() < self.width()
+            and self.height() - grip_size < e.y() < self.height()
         )
         if self._resizing:
             start_pos, geom = self._resize_start
             dx = e.globalX() - start_pos.x()
             dy = e.globalY() - start_pos.y()
-            self.resize(max(200, geom.width()+dx), max(100, geom.height()+dy))
+            self.resize(max(200, geom.width() + dx), max(100, geom.height() + dy))
         elif in_grip_area:
             self.setCursor(Qt.SizeFDiagCursor)
         elif self._drag_offset and not self.locked:
@@ -259,8 +239,7 @@ class GraphWindow(QtWidgets.QDialog):
             self._drag_offset = None
         # save geometry
         g = self.geometry()
-        self.config.data["graph_geometry"] = [
-            g.x(), g.y(), g.width(), g.height()]
+        self.config.data["graph_geometry"] = [g.x(), g.y(), g.width(), g.height()]
         self.config.save()
 
     def contextMenuEvent(self, event):
@@ -300,13 +279,17 @@ class GraphWindow(QtWidgets.QDialog):
         d = self.config.data
         self.interval = d.get("update_interval", 1.0)
         self.timer.setInterval(int(self.interval * 1000))
-        self.max_history = d.get("graph_history", 60)
-        while len(self.sent_hist) > self.max_history:
-            self.sent_hist.pop(0)
-            self.recv_hist.pop(0)
-        while len(self.sent_hist) < self.max_history:
-            self.sent_hist.insert(0, 0.0)
-            self.recv_hist.insert(0, 0.0)
+        new_max = d.get("graph_history", 60)
+        if new_max != self.max_history:
+            # Rebuild deques at the new size, keeping the most recent samples.
+            sent = list(self.sent_hist)[-new_max:]
+            recv = list(self.recv_hist)[-new_max:]
+            while len(sent) < new_max:
+                sent.insert(0, 0.0)
+                recv.insert(0, 0.0)
+            self.max_history = new_max
+            self.sent_hist = deque(sent, maxlen=new_max)
+            self.recv_hist = deque(recv, maxlen=new_max)
         self.unit = d.get("unit", "MB/s")
         self.precision = d.get("precision", 2)
         self.font = d.get("font", "Segoe UI")
