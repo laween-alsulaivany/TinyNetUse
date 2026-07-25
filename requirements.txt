@@ -1,10 +1,4 @@
-customtkinter
 psutil
-Pillow
-win10toast
-matplotlib
-pystray
-Pillow
-pyinstaller
 PyQt5
-pyqtgraph
+pywin32
+pyinstaller
