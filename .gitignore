@@ -1,7 +1,6 @@
 __pycache__/
 *.py[cod]
 *.log
-.config.json
 dist/
 build/
 *.spec
@@ -10,3 +9,6 @@ build/
 *.json.bak
 /tests
 .venv/
+/private
+*.json
+*.exe
