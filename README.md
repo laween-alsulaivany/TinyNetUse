@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/TinyNetUse-horizontal-light.png">
+  <img alt="TinyNetUse" src="docs/TinyNetUse-horizontal-dark.png" width="380">
+</picture>
+
 # TinyNetUse
 
 Lightweight Windows desktop widget that shows real-time network upload/download speeds as a floating overlay. Includes an optional rolling graph window.

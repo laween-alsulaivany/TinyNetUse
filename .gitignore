@@ -3,6 +3,7 @@ __pycache__/
 *.log
 dist/
 build/
+installer/
 *.spec
 *.db
 *.sqlite
@@ -11,4 +12,3 @@ build/
 .venv/
 /private
 *.json
-*.exe
