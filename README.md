@@ -5,115 +5,89 @@
 
 # TinyNetUse
 
-Lightweight Windows desktop widget that shows real-time network upload/download speeds as a floating overlay. Includes an optional rolling graph window.
+TinyNetUse is a small open-source Windows utility that shows current download and upload speeds in a movable desktop overlay, with an optional history graph.
 
----
+<p align="center">
+  <img src="docs/screenshots/tinynetuse-overlay.png"
+       alt="TinyNetUse download and upload speed overlay on the Windows desktop"
+       width="420">
+</p>
 
-## Running from source
+<!-- TODO (optional): Add a short demonstration here when it is available.
+<p align="center">
+  <img src="docs/screenshots/tinynetuse-demo.gif"
+       alt="TinyNetUse overlay being moved and configured on the Windows desktop"
+       width="760">
+</p>
+-->
 
-**Requirements:** Python 3.9+
+## Download
 
-```bash
-pip install -r requirements.txt
-python main.py
-```
+TinyNetUse is currently verified on 64-bit Windows 11. Other Windows versions have not yet been verified.
 
-`config.json` is created next to `main.py` on first run and updated automatically.
+[Download the latest TinyNetUse release](https://github.com/laween-alsulaivany/TinyNetUse/releases/latest)
 
----
+For most users, choose **`TinyNetUse-Setup-<version>.exe`**. The installer sets up TinyNetUse for your Windows account and does not require administrator access.
 
-## Building an executable
+The portable download runs without installation. Keep `portable.flag` beside `TinyNetUse.exe` so its settings stay in the same folder.
 
-Install dependencies first if you haven't:
+Neither download requires Python. Current release builds are not code-signed, so Windows SmartScreen may show a warning when you first run them.
 
-```bash
-pip install -r requirements.txt
-```
+## Features
 
-### Optional: UPX compression (recommended)
+- Live download and upload speeds with automatic or fixed units
+- Automatic active-connection monitoring or a specific network adapter
+- Optional rolling network graph
+- Movable and resizable overlay with position locking and always-on-top mode
+- Configurable font, colors, opacity, precision, update interval, and download highlight threshold
+- System tray controls and an optional launch-at-Windows-startup setting
+- Single-instance behavior, so reopening TinyNetUse shows the existing overlay
 
-UPX compresses native binaries and reduces the final exe size by roughly 40-50%. Without it the build still works fine — it's just larger.
+## Basic usage
 
-1. Download the latest UPX release from https://github.com/upx/upx/releases (e.g. `upx-5.x.x-win64.zip`).
-2. Extract the zip to a permanent folder, for example `C:\tools\upx\`.
-3. Add `--upx-dir C:\tools\upx` to the PyInstaller command below.
+1. Install TinyNetUse, or extract the portable files to a folder you can keep.
+2. Launch TinyNetUse. The speed overlay appears on the desktop and a TinyNetUse icon appears in the system tray.
+3. Right-click the overlay or tray icon for graph controls, overlay options, Settings, window-position recovery, About, and Quit.
+4. Drag the overlay to move it. Drag its bottom-right corner to resize it.
 
-### Folder build (required for the installer)
+Your settings and window positions are saved automatically.
 
-Produces `dist/TinyNetUse/TinyNetUse.exe`. The config file lives alongside the exe in the same folder. This is the build used by the Inno Setup installer.
+## Screenshots
 
-```bash
-pyinstaller --noconfirm --onedir --windowed ^
-  --icon=assets/windows-classic/TinyNetUse.ico ^
-  --name TinyNetUse ^
-  --add-data "assets;assets" ^
-  --hidden-import win32com.client ^
-  --hidden-import win32com.shell ^
-  --hidden-import pythoncom ^
-  --upx-dir C:\tools\upx ^
-  main.py
-```
+The graph displays recent download and upload activity using the same units as the overlay.
 
-Remove `--upx-dir ...` if you skipped the UPX step.
+<p align="center">
+  <img src="docs/screenshots/tinynetuse-graph.png"
+       alt="TinyNetUse rolling download and upload speed graph"
+       width="860">
+</p>
 
-### Single-file build (portable)
+The settings window controls the overlay, graph, units, appearance, alerts, and startup behavior.
 
-Produces a single `dist/TinyNetUse.exe`. Config is saved next to the exe (not inside the archive). Useful for distributing a single file without an installer.
+<!-- TODO: Replace this file with a screenshot that shows the actual settings window. -->
+<p align="center">
+  <img src="docs/screenshots/tinynetuse-settings.png"
+       alt="TinyNetUse settings window"
+       width="520">
+</p>
 
-```bash
-pyinstaller --noconfirm --onefile --windowed ^
-  --icon=assets/windows-classic/TinyNetUse.ico ^
-  --name TinyNetUse ^
-  --add-data "assets;assets" ^
-  --hidden-import win32com.client ^
-  --hidden-import win32com.shell ^
-  --hidden-import pythoncom ^
-  --upx-dir C:\tools\upx ^
-  main.py
-```
 
-> The `--hidden-import` flags are required because PyInstaller doesn't detect COM imports (`startup.py`) automatically.
+## Privacy and network behavior
 
-Output lands in `dist/`. The `build/` folder and `TinyNetUse.spec` can be deleted after a successful build.
+TinyNetUse reads the network byte counters provided by Windows to calculate current speeds. It does not inspect packet contents, send telemetry, or collect usage data. Project and release links open GitHub in your default browser only when you select them.
 
----
+In Auto mode, TinyNetUse asks Windows which adapter owns the best network route. This is a local route lookup and does not send a packet. If Windows cannot provide a matching adapter, TinyNetUse totals all active adapters that have a usable non-loopback IP address. This fallback can include physical, VPN, and virtual adapters, so layered traffic may be counted more than once. TinyNetUse is not an exact ISP bandwidth accounting tool.
 
-## Building the installer
+Installed settings are stored locally in `%LOCALAPPDATA%\TinyNetUse\config.json`. Portable settings are stored beside the executable only when `portable.flag` is present.
 
-The installer bundles the folder build into a single `TinyNetUse-Setup-1.0.0.exe` that handles installation, Start Menu shortcuts, and optional desktop/startup entries.
+## Issues and feedback
 
-**Prerequisites:** Inno Setup 6 — https://jrsoftware.org/isdl.php
+Report bugs or request changes through [GitHub Issues](https://github.com/laween-alsulaivany/TinyNetUse/issues). Include your TinyNetUse version, Windows version, and the steps that reproduce the problem when possible.
 
-1. Run the folder build above so `dist\TinyNetUse\` exists.
-2. Compile the installer:
+## License
 
-```bash
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
-```
+TinyNetUse is open source under the [MIT License](LICENSE).
 
-Or open `installer.iss` in the Inno Setup IDE and press **Build → Compile**.
+## Development
 
-Output: `installer\TinyNetUse-Setup-1.0.0.exe`
-
-For convenience, `build.bat` runs both steps in sequence (see below).
-
----
-
-## build.bat
-
-`build.bat` automates the full release build: PyInstaller folder build followed by Inno Setup compile.
-
-```bash
-build.bat
-```
-
-Edit the `UPX_DIR` variable at the top of the file to point to your UPX folder, or leave it empty to skip compression.
-
----
-
-## Usage
-
-- **Right-click** the widget to access settings, toggle the graph, lock position, and quit.
-- **Left-click and drag** to move. Drag the bottom-right corner to resize.
-- Settings and window positions are saved to `config.json` automatically.
-- "Launch at Startup" in Settings installs a shortcut in the Windows Startup folder.
+Source setup, testing, build, and release instructions are in [DEVELOPMENT.md](DEVELOPMENT.md).
