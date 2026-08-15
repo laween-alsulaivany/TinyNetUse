@@ -1,4 +1,5 @@
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *.log
 dist/
@@ -8,7 +9,6 @@ installer/
 *.db
 *.sqlite
 *.json.bak
-/tests
 .venv/
 /private
-*.json
+/config.json
