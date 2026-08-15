@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest a focused improvement that fits TinyNetUse.
+title: "[Feature] "
+labels: []
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        TinyNetUse is intentionally a small network-speed utility. Please explain the problem before proposing a solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Requested behavior
+      description: Describe the smallest change that would solve the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fit
+    attributes:
+      label: Why this fits TinyNetUse
+      description: Explain why this belongs in a lightweight network-speed overlay.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include any workaround you currently use.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing issues for a similar request.
+          required: true
+        - label: This request keeps TinyNetUse focused on network-speed monitoring.
+          required: true
