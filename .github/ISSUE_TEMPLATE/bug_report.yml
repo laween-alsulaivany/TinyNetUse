@@ -1,0 +1,84 @@
+name: Bug report
+description: Report a reproducible problem with TinyNetUse.
+title: "[Bug] "
+labels: []
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not include passwords, tokens, or other private information.
+
+  - type: input
+    id: version
+    attributes:
+      label: TinyNetUse version
+      description: Find this in About TinyNetUse or the downloaded filename.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: How are you running TinyNetUse?
+      options:
+        - Installer
+        - Portable build
+        - From source
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and any error message you saw.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that consistently causes the problem.
+      placeholder: |
+        1. Open TinyNetUse
+        2. Change ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Add anything that helps explain the problem. Remove private information first.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing issues for the same problem.
+          required: true
+        - label: This report does not contain a security vulnerability.
+          required: true
