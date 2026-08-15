@@ -41,7 +41,6 @@ Neither download requires Python. Current release builds are not code-signed, so
 - Movable and resizable overlay with position locking and always-on-top mode
 - Configurable font, colors, opacity, precision, update interval, and download highlight threshold
 - System tray controls and an optional launch-at-Windows-startup setting
-- Single-instance behavior, so reopening TinyNetUse shows the existing overlay
 
 ## Basic usage
 
