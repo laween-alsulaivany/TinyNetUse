@@ -69,7 +69,7 @@ The CI job only has read access to repository contents. It does not build or pub
 - Portable builds use `config.json` beside `TinyNetUse.exe` when `portable.flag` is beside the executable.
 - Source mode uses `%LOCALAPPDATA%\TinyNetUse\dev\config.json`.
 
-When an installed build finds an older `config.json` beside its executable and the AppData config does not exist yet, it validates and moves those settings to AppData once. The installer and uninstaller do not remove the AppData config.
+When an installed build finds an older `config.json` beside its executable and the AppData config does not exist yet, it validates and moves those settings to AppData once. An interactive uninstall asks whether to keep or remove AppData settings. Silent uninstalls keep them.
 
 ## Project structure
 

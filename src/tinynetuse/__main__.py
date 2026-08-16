@@ -1,4 +1,4 @@
-"""Compatibility launcher for running TinyNetUse from the repository root."""
+"""Run TinyNetUse with ``python -m tinynetuse``."""
 
 from tinynetuse.app import main
 

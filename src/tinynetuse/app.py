@@ -1,0 +1,465 @@
+"""Application startup, overlay widget, tray icon, and update loop."""
+
+import sys
+from pathlib import Path
+
+# PySide6 imports for Qt GUI elements.
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt, QRectF
+
+from tinynetuse.about_dialog import AboutDialog
+from tinynetuse.config import Config
+from tinynetuse.geometry import (
+    dock_window,
+    geometry_values,
+    restore_window_geometry,
+)
+from tinynetuse.graph_window import GraphWindow
+from tinynetuse.network import NetworkSampler
+from tinynetuse.settings_dialog import SettingsDialog
+from tinynetuse.single_instance import SingleInstance
+from tinynetuse.units import format_rate, threshold_bytes_per_sec
+from tinynetuse.version import __version__
+
+
+OVERLAY_DEFAULT_SIZE = QtCore.QSize(140, 60)
+OVERLAY_MINIMUM_SIZE = QtCore.QSize(100, 40)
+
+
+def _asset_path(relative: str) -> str:
+    # PyInstaller extracts bundled files to _MEIPASS.
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).parents[2]))
+    return str(base / relative)
+
+
+class TinyNetUseWidget(QtWidgets.QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # ── Load Config & State ──
+        self.config = Config()
+        self.locked = False
+
+        # ── Window Setup ──
+        d = self.config.data
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setMinimumSize(OVERLAY_MINIMUM_SIZE)
+        self.resize(OVERLAY_DEFAULT_SIZE)
+        base_flags = Qt.FramelessWindowHint | Qt.Tool
+        self.setWindowFlags(
+            base_flags
+            | (Qt.WindowStaysOnTopHint if d.get("widget_always_on_top") else 0)
+        )
+        self.setWindowOpacity(d.get("opacity", 1.0))
+        self.always_on_top = d.get("widget_always_on_top", True)
+
+        # ── App Icon ──
+        app_icon = QtGui.QIcon()
+        for _s in [16, 20, 24, 32, 48, 64, 128, 256]:
+            app_icon.addFile(
+                _asset_path(f"assets/windows-classic/png/app-icon-{_s}.png"),
+                QtCore.QSize(_s, _s),
+            )
+        self.setWindowIcon(app_icon)
+        QtWidgets.QApplication.setWindowIcon(app_icon)
+
+        # ── Font ──
+        font_name = d.get("font", "Segoe UI")
+        font = QtGui.QFont(font_name, d.get("font_size", 10))
+        if not font.exactMatch():
+            # Font isn't available - fall back for rendering but don't overwrite
+            # the user's saved preference; they might just need to install the font.
+            font = QtGui.QFont("Segoe UI", d.get("font_size", 10))
+        QtWidgets.QApplication.setFont(font)
+
+        # ── Labels ──
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(2)
+        self.dl_label = QtWidgets.QLabel()
+        self.ul_label = QtWidgets.QLabel()
+        for lbl in (self.dl_label, self.ul_label):
+            # Dynamic initial color
+            lbl.setStyleSheet(f"color: {d.get('font_color', 'white')}")
+            layout.addWidget(lbl)
+
+        self.sampler = NetworkSampler(d.get("network_adapter", "auto"))
+        if d.get("network_adapter") != self.sampler.selected_adapter:
+            d["network_adapter"] = self.sampler.selected_adapter
+            self.config.save()
+
+        # ── Update Timer ──
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self._update_speeds)
+
+        restored = restore_window_geometry(
+            self,
+            d.get("widget_geometry"),
+            OVERLAY_DEFAULT_SIZE,
+            OVERLAY_MINIMUM_SIZE,
+        )
+        restored_values = geometry_values(restored)
+        if d.get("widget_geometry") != restored_values:
+            d["widget_geometry"] = restored_values
+            self.config.save()
+
+        # ── Locked? ──
+        self.locked = bool(d.get("widget_locked", False))
+
+        # ── Drag support ──
+        self._drag_offset = None
+
+        # ── Resizing support ──
+        self._resizing = False
+        self._resize_start_pos = None
+        self._resize_start_geom = None
+
+        # ── Graph Window ──
+
+        self.graph_window = None
+        self.graph_visible = d.get("graph_visible", False)
+        if self.graph_visible:
+            self.graph_window = GraphWindow(parent=self, config=self.config)
+            self.graph_window.closed.connect(self._on_graph_closed)
+            self.graph_window.show()
+
+        # ── Apply current settings ──
+        self.apply_settings()
+
+        # ── System Tray ──
+        self._setup_tray()
+
+    def contextMenuEvent(self, event):
+        menu = QtWidgets.QMenu(self)
+        self._populate_app_menu(menu)
+        menu.exec(event.globalPos())
+
+    def toggle_graph(self, visible):
+        if visible:
+            self.graph_visible = True
+            self.config.data["graph_visible"] = True
+            self.config.save()
+            if self.graph_window is None:
+                self.graph_window = GraphWindow(parent=self, config=self.config)
+                self.graph_window.closed.connect(self._on_graph_closed)
+            elif not self.graph_window.isVisible():
+                self.graph_window.clear_history()
+            self.graph_window.show()
+            self.graph_window.raise_()
+            self.graph_window.activateWindow()
+        else:
+            if self.graph_window:
+                self.graph_window.close()
+            else:
+                self._on_graph_closed()
+
+    def toggle_always_on_top(self, on: bool):
+        self.always_on_top = on
+        f = self.windowFlags() & ~Qt.WindowStaysOnTopHint
+        if on:
+            f |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(f)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.config.data["widget_always_on_top"] = on
+        self.config.save()
+
+    def toggle_lock(self, lock: bool):
+        self.locked = lock
+        self.config.data["widget_locked"] = lock
+        self.config.save()
+
+    def open_settings(self):
+        SettingsDialog(self).exec()
+
+    def open_about(self):
+        AboutDialog(self).exec()
+
+    def apply_settings(self):
+        d = self.config.data
+
+        previous_source = self.sampler.source_revision
+        self.sampler.set_adapter(d.get("network_adapter", "auto"))
+        if d.get("network_adapter") != self.sampler.selected_adapter:
+            d["network_adapter"] = self.sampler.selected_adapter
+            self.config.save()
+        if (
+            self.graph_window
+            and self.graph_window.isVisible()
+            and self.sampler.source_revision != previous_source
+        ):
+            self.graph_window.clear_history()
+
+        # Alert color
+        self.alert_color = d.get("alert_color", "#FF5555")
+        self._alert_active = False
+
+        # Interval
+        self.timer.setInterval(int(d["update_interval"] * 1000))
+        self.timer.start()
+
+        # Formatting
+        self.unit = d["unit"]
+        self.precision = d["precision"]
+        self.download_threshold = threshold_bytes_per_sec(
+            d["notify_threshold"].get("download")
+        )
+        self.upload_threshold = threshold_bytes_per_sec(
+            d["notify_threshold"].get("upload")
+        )
+        self.opacity = d["opacity"]
+
+        # Font settings
+        self.font = d.get("font", "Segoe UI")
+        self.font_size = d.get("font_size", 10)
+        self.font_color = d.get("font_color", "white")
+        self.font_bold = d.get("font_bold", True)
+
+        # Update labels' color
+        for lbl in (self.dl_label, self.ul_label):
+            lbl.setStyleSheet(f"color: {self.font_color}")
+
+        # Font family + size go app-wide so dialogs use the right typeface.
+        # Bold is widget-only — applying it globally would bold every menu and dialog.
+        QtWidgets.QApplication.setFont(QtGui.QFont(self.font, self.font_size))
+        label_font = QtGui.QFont(self.font, self.font_size)
+        label_font.setBold(self.font_bold)
+        for lbl in (self.dl_label, self.ul_label):
+            lbl.setFont(label_font)
+
+        # Opacity
+        self.setWindowOpacity(d.get("opacity", 1.0))
+
+        # Update graph window settings
+        if self.graph_window:
+            self.graph_window.apply_settings()
+        # Immediately refresh
+        self._update_speeds()
+
+    # Put both persistent windows back in their default locations.
+    def reset_window_positions(self):
+        overlay_offset = 0
+        self.config.data["graph_geometry"] = None
+
+        if self.graph_window and self.graph_window.isVisible():
+            graph_rect = self.graph_window.reset_position()
+            self.config.data["graph_geometry"] = geometry_values(graph_rect)
+            overlay_offset = graph_rect.height() + 10
+
+        overlay_rect = dock_window(
+            self,
+            self.size(),
+            OVERLAY_MINIMUM_SIZE,
+            bottom_offset=overlay_offset,
+        )
+        self.config.data["widget_geometry"] = geometry_values(overlay_rect)
+
+        self.config.save()
+
+    def _update_speeds(self):
+        previous_source = self.sampler.source_revision
+        sent_per_sec, recv_per_sec = self.sampler.sample()
+        source_changed = self.sampler.source_revision != previous_source
+
+        if self.config.data.get("network_adapter") != self.sampler.selected_adapter:
+            self.config.data["network_adapter"] = self.sampler.selected_adapter
+            self.config.save()
+
+        if self.graph_window and self.graph_window.isVisible():
+            if source_changed:
+                self.graph_window.clear_history()
+            self.graph_window.add_sample(sent_per_sec, recv_per_sec)
+
+        self.dl_label.setText(
+            "↓ " + format_rate(recv_per_sec, self.unit, self.precision)
+        )
+        self.ul_label.setText(
+            "↑ " + format_rate(sent_per_sec, self.unit, self.precision)
+        )
+
+        self._alert_active = False
+        download_high = (
+            self.download_threshold is not None
+            and recv_per_sec > self.download_threshold
+        )
+        upload_high = (
+            self.upload_threshold is not None
+            and sent_per_sec > self.upload_threshold
+        )
+        self._alert_active = download_high or upload_high
+
+        self.update()  # for trigger repaint
+
+    def paintEvent(self, event):
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 8.0, 8.0)
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+
+        # Change background color based on alert state
+        if getattr(self, "_alert_active", False):
+            bg_color = QtGui.QColor(self.alert_color)
+        else:
+            bg_color = QtGui.QColor(0, 0, 0, 160)
+        p.fillPath(path, bg_color)
+
+        # For Drag Handle
+        p.setPen(QtGui.QPen(QtGui.QColor("#aaa")))
+        size = 16
+        for i in range(4, size, 4):
+            p.drawLine(self.width() - i, self.height(), self.width(), self.height() - i)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and not self.locked:
+            grip = 16
+            pos = e.position().toPoint()
+            if pos.x() > self.width() - grip and pos.y() > self.height() - grip:
+                # Capture the start geometry once so the delta stays stable during drag.
+                self._resizing = True
+                self._resize_start_pos = e.globalPosition().toPoint()
+                self._resize_start_geom = self.geometry()
+            else:
+                self._drag_offset = (
+                    e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                )
+
+    def mouseMoveEvent(self, e):
+        grip_size = 16
+        pos = e.position()
+        in_grip_area = (
+            self.width() - grip_size < pos.x() < self.width()
+            and self.height() - grip_size < pos.y() < self.height()
+        )
+
+        if self._resizing:
+            global_pos = e.globalPosition().toPoint()
+            dx = global_pos.x() - self._resize_start_pos.x()
+            dy = global_pos.y() - self._resize_start_pos.y()
+            new_w = max(self.minimumWidth(), self._resize_start_geom.width() + dx)
+            new_h = max(self.minimumHeight(), self._resize_start_geom.height() + dy)
+            self.resize(new_w, new_h)
+        elif in_grip_area:
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif not self.locked and self._drag_offset and (e.buttons() & Qt.LeftButton):
+            self.move(e.globalPosition().toPoint() - self._drag_offset)
+            self.setCursor(Qt.ClosedHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
+    def mouseReleaseEvent(self, e):
+
+        # release the resizing flag and reset cursor
+        self._resizing = False
+        self.setCursor(QtCore.Qt.ArrowCursor)
+        self._resize_start_pos = None
+        self._resize_start_geom = None
+
+        if not self.locked:
+            self._drag_offset = None
+        g = self.geometry()
+        self.config.data["widget_geometry"] = [g.x(), g.y(), g.width(), g.height()]
+        self.config.save()
+
+    def _setup_tray(self):
+        tray_icon = QtGui.QIcon()
+        for _s in [16, 20, 24, 32]:
+            tray_icon.addFile(
+                _asset_path(f"assets/tray/tray-color-{_s}.png"),
+                QtCore.QSize(_s, _s),
+            )
+        self.tray = QtWidgets.QSystemTrayIcon(tray_icon, self)
+        self.tray.setToolTip("TinyNetUse")
+        self._tray_menu = QtWidgets.QMenu()
+        # Rebuild the menu on open so checked states are always current.
+        self._tray_menu.aboutToShow.connect(self._build_tray_menu)
+        self.tray.setContextMenu(self._tray_menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _build_tray_menu(self):
+        self._tray_menu.clear()
+        self._populate_app_menu(self._tray_menu)
+
+    def _populate_app_menu(self, menu):
+        overlay_text = "Hide Overlay" if self.isVisible() else "Show Overlay"
+        overlay = menu.addAction(overlay_text)
+        overlay.triggered.connect(self.toggle_overlay_visibility)
+
+        graph = menu.addAction("Show Graph")
+        graph.setCheckable(True)
+        graph.setChecked(self.graph_visible)
+        graph.triggered.connect(self.toggle_graph)
+
+        atop = menu.addAction("Always On Top")
+        atop.setCheckable(True)
+        atop.setChecked(self.always_on_top)
+        atop.triggered.connect(self.toggle_always_on_top)
+
+        lock = menu.addAction("Lock Position")
+        lock.setCheckable(True)
+        lock.setChecked(self.locked)
+        lock.triggered.connect(self.toggle_lock)
+
+        menu.addAction("Settings", self.open_settings)
+        menu.addAction("Reset Window Positions", self.reset_window_positions)
+        menu.addAction("About TinyNetUse", self.open_about)
+        menu.addSeparator()
+        menu.addAction("Quit", QtWidgets.QApplication.quit)
+
+    def _on_tray_activated(self, reason):
+        # Single click: bring widget forward in case it got buried.
+        if reason == QtWidgets.QSystemTrayIcon.ActivationReason.Trigger:
+            self.show_overlay()
+
+    def toggle_overlay_visibility(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show_overlay()
+
+    # Used by the tray icon and second-process IPC activation.
+    @QtCore.Slot()
+    def show_overlay(self):
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+        if self.windowHandle():
+            self.windowHandle().requestActivate()
+
+    def closeEvent(self, e):
+        self.timer.stop()
+        if hasattr(self, "tray"):
+            self.tray.hide()
+        QtWidgets.QApplication.instance().quit()
+
+    def _on_graph_closed(self):
+        self.graph_visible = False
+        self.config.data["graph_visible"] = False
+        self.config.save()
+
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+    app.setApplicationName("TinyNetUse")
+    app.setApplicationVersion(__version__)
+
+    command = "quit" if "--quit" in sys.argv[1:] else "show"
+    single_instance = SingleInstance()
+    if not single_instance.start(command):
+        return 0
+    if command == "quit":
+        return 0
+
+    w = TinyNetUseWidget()
+    single_instance.show_requested.connect(w.show_overlay)
+    single_instance.quit_requested.connect(w.close)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

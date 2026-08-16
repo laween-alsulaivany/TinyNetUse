@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install development dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install --requirement requirements.lock
+          .\.venv\Scripts\python.exe -m pip install --no-build-isolation --no-deps --editable .
+
+      - name: Check Python syntax
+        shell: pwsh
+        run: |
+          $files = git ls-files "*.py"
+          .\.venv\Scripts\python.exe -m py_compile $files
+
+      - name: Run tests
+        run: .\.venv\Scripts\python.exe -m pytest

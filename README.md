@@ -13,7 +13,7 @@ TinyNetUse is a small open-source Windows utility that shows current download an
        width="420">
 </p>
 
-<!-- TODO (optional): Add a short demonstration here when it is available.
+<!-- TODO: Add a short gif demonstration here later.
 <p align="center">
   <img src="docs/screenshots/tinynetuse-demo.gif"
        alt="TinyNetUse overlay being moved and configured on the Windows desktop"
@@ -39,7 +39,7 @@ Neither download requires Python. Current release builds are not code-signed, so
 - Automatic active-connection monitoring or a specific network adapter
 - Optional rolling network graph
 - Movable and resizable overlay with position locking and always-on-top mode
-- Configurable font, colors, opacity, precision, update interval, and download highlight threshold
+- Configurable font, colors, opacity, precision, update interval, and download/upload highlight thresholds
 - System tray controls and an optional launch-at-Windows-startup setting
 
 ## Basic usage
@@ -63,13 +63,11 @@ The graph displays recent download and upload activity using the same units as t
 
 The settings window controls the overlay, graph, units, appearance, alerts, and startup behavior.
 
-<!-- TODO: Replace this file with a screenshot that shows the actual settings window. -->
 <p align="center">
   <img src="docs/screenshots/tinynetuse-settings.png"
        alt="TinyNetUse settings window"
        width="520">
 </p>
-
 
 ## Privacy and network behavior
 

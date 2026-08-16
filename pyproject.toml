@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "TinyNetUse"
+dynamic = ["version"]
+description = "A small Windows utility that displays current upload and download speeds."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Laween Al-Sulaivany" },
+]
+dependencies = [
+  "psutil>=7.2,<8",
+  "PySide6>=6.11,<7",
+  "pywin32>=312; sys_platform == 'win32'",
+]
+classifiers = [
+  "Environment :: Win32 (MS Windows)",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: Microsoft :: Windows :: Windows 11",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Networking :: Monitoring",
+]
+
+[project.optional-dependencies]
+dev = [
+  "PyInstaller>=6.22,<7",
+  "pytest>=9.1,<10",
+  "pytest-qt>=4.5,<5",
+]
+
+[project.urls]
+Homepage = "https://github.com/laween-alsulaivany/TinyNetUse"
+Repository = "https://github.com/laween-alsulaivany/TinyNetUse"
+Issues = "https://github.com/laween-alsulaivany/TinyNetUse/issues"
+Releases = "https://github.com/laween-alsulaivany/TinyNetUse/releases"
+
+[project.gui-scripts]
+TinyNetUse = "tinynetuse.app:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tinynetuse.version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

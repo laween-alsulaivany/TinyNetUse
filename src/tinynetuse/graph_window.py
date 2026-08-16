@@ -1,17 +1,26 @@
 # graph_window.py — Floating dialog that draws a rolling network speed history graph.
 
 from collections import deque
-import time
 
-import psutil
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import QRectF, Qt
+from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QAction
 
-from config import Config
+from tinynetuse.config import Config
+from tinynetuse.geometry import (
+    dock_window,
+    geometry_values,
+    restore_window_geometry,
+)
+from tinynetuse.units import convert_rate, format_rate, select_auto_unit
+
+
+GRAPH_DEFAULT_SIZE = QtCore.QSize(600, 320)
+GRAPH_MINIMUM_SIZE = QtCore.QSize(200, 100)
 
 
 class GraphWindow(QtWidgets.QDialog):
-    closed = QtCore.pyqtSignal()
+    closed = Signal()
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -21,7 +30,8 @@ class GraphWindow(QtWidgets.QDialog):
         # ── Window Setup ──
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowTitle("Network Usage Graph")
-        self.resize(600, 320)
+        self.setMinimumSize(GRAPH_MINIMUM_SIZE)
+        self.resize(GRAPH_DEFAULT_SIZE)
         base = Qt.FramelessWindowHint | Qt.Dialog
         flags = base | (Qt.WindowStaysOnTopHint if d.get("graph_always_on_top") else 0)
 
@@ -32,33 +42,29 @@ class GraphWindow(QtWidgets.QDialog):
         self.locked = d.get("graph_locked", False)
 
         # ── Load Geometry ──
-        geom = d.get("graph_geometry")
-        if isinstance(geom, (list, tuple)) and len(geom) == 4:
-            x, y, w, h = map(int, geom)
-            self.setGeometry(x, y, w, h)
-        else:
-            self._dock_bottom_right()
+        restored = restore_window_geometry(
+            self,
+            d.get("graph_geometry"),
+            GRAPH_DEFAULT_SIZE,
+            GRAPH_MINIMUM_SIZE,
+        )
+        restored_values = geometry_values(restored)
+        if d.get("graph_geometry") != restored_values:
+            d["graph_geometry"] = restored_values
+            self.config.save()
 
         # ── Data & State ──
         self.max_history = d.get("graph_history", 60)
-        self.interval = d.get("update_interval", 1.0)
         self.unit = d.get("unit", "MB/s")
         self.precision = d.get("precision", 2)
         self.bg_color = QtGui.QColor(0, 0, 0, 220)
         self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))
         self.line_ul = QtGui.QColor(d.get("upload_color", "#FF8A65"))
-        cnt = psutil.net_io_counters()
-        self.last_sent, self.last_recv = cnt.bytes_sent, cnt.bytes_recv
         self.sent_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.recv_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.last_dl = 0.0
         self.last_ul = 0.0
         self.auto_scale = True
-
-        # ── Timer ──
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self._update)
-        self.timer.start(int(self.interval * 1000))
 
         # ── Drag & Resize State ──
         self._drag_offset = None
@@ -68,12 +74,9 @@ class GraphWindow(QtWidgets.QDialog):
         # ── Apply Settings ──
         self.apply_settings()
 
-    def _dock_bottom_right(self):
-        ag = QtWidgets.QApplication.primaryScreen().availableGeometry()
-        w, h = self.width(), self.height()
-        x = ag.right() - w - 10
-        y = ag.bottom() - h - 10
-        self.setGeometry(x, y, w, h)
+    # Used by the shared Reset Window Positions action.
+    def reset_position(self):
+        return dock_window(self, self.size(), GRAPH_MINIMUM_SIZE)
 
     def _swap_colors(self):
         self.line_dl, self.line_ul = self.line_ul, self.line_dl
@@ -82,39 +85,20 @@ class GraphWindow(QtWidgets.QDialog):
         self.config.save()
         self.update()
 
-    def _update(self):
-        now = time.time()
-        elapsed = now - getattr(self, "_last_update_time", now)
-        self._last_update_time = now
+    # The main widget passes in the one shared sampler result.
+    def add_sample(self, sent_bps, recv_bps):
+        self.last_ul = sent_bps
+        self.last_dl = recv_bps
+        self.sent_hist.append(sent_bps)
+        self.recv_hist.append(recv_bps)
+        self.update()
 
-        if elapsed == 0:
-            return
-
-        cnt = psutil.net_io_counters()
-        raw_sent = cnt.bytes_sent - self.last_sent
-        raw_recv = cnt.bytes_recv - self.last_recv
-        self.last_sent, self.last_recv = cnt.bytes_sent, cnt.bytes_recv
-
-        # Divide by elapsed so the graph shows per-second rates, not per-tick volumes.
-        sent_bps = raw_sent / elapsed
-        recv_bps = raw_recv / elapsed
-
-        if self.unit == "KB/s":
-            sent = sent_bps / (1 << 10)
-            recv = recv_bps / (1 << 10)
-        elif self.unit == "MB/s":
-            sent = sent_bps / (1 << 20)
-            recv = recv_bps / (1 << 20)
-        else:  # auto and bit-based units: use MB/s scale for the graph
-            sent = sent_bps / (1 << 20)
-            recv = recv_bps / (1 << 20)
-
-        self.last_ul = sent
-        self.last_dl = recv
-
-        # deque handles the max_history cap automatically
-        self.sent_hist.append(sent)
-        self.recv_hist.append(recv)
+    # Old samples belong to the previous adapter and should not be mixed in.
+    def clear_history(self):
+        self.sent_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
+        self.recv_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
+        self.last_dl = 0.0
+        self.last_ul = 0.0
         self.update()
 
     def paintEvent(self, event):
@@ -134,8 +118,22 @@ class GraphWindow(QtWidgets.QDialog):
         w = rect.width() - 2 * base_margin
         ox = base_margin
 
-        # Choose scale
-        all_vals = list(self.sent_hist) + list(self.recv_hist)
+        # Auto uses one unit for the whole graph.
+        display_unit = self.unit
+        if display_unit == "auto":
+            largest = max(
+                max(self.sent_hist, default=0.0),
+                max(self.recv_hist, default=0.0),
+            )
+            display_unit = select_auto_unit(largest)
+
+        sent_values = [
+            convert_rate(rate, display_unit) for rate in self.sent_hist
+        ]
+        recv_values = [
+            convert_rate(rate, display_unit) for rate in self.recv_hist
+        ]
+        all_vals = sent_values + recv_values
         maxv = max(max(all_vals, default=0.0), 0.001) * 1.2
 
         # Dynamic line thickness (1 to 3 pixels)
@@ -151,10 +149,10 @@ class GraphWindow(QtWidgets.QDialog):
                 y = oy + h - (v / maxv) * h
                 points.append(QtCore.QPointF(x, y))
             if len(points) > 1:
-                painter.drawPolyline(*points)
+                painter.drawPolyline(points)
 
-        draw_series(self.recv_hist, self.line_dl)
-        draw_series(self.sent_hist, self.line_ul)
+        draw_series(recv_values, self.line_dl)
+        draw_series(sent_values, self.line_ul)
 
         # Dynamic font size (6 to 12 points)
         font_size = max(6, min(12, rect.width() * 0.02))  # 2% of width
@@ -163,13 +161,15 @@ class GraphWindow(QtWidgets.QDialog):
         painter.setFont(font)
 
         # Calculate label positions
-        y_dl = oy + h - (self.last_dl / maxv) * h
-        y_ul = oy + h - (self.last_ul / maxv) * h
+        last_dl = convert_rate(self.last_dl, display_unit)
+        last_ul = convert_rate(self.last_ul, display_unit)
+        y_dl = oy + h - (last_dl / maxv) * h
+        y_ul = oy + h - (last_ul / maxv) * h
 
         # Format labels with dynamic precision
         precision = self.precision
-        dl_label = f"↓ {self.last_dl:.{precision}f} {self.unit}"
-        ul_label = f"↑ {self.last_ul:.{precision}f} {self.unit}"
+        dl_label = f"↓ {format_rate(self.last_dl, display_unit, precision)}"
+        ul_label = f"↑ {format_rate(self.last_ul, display_unit, precision)}"
 
         # Draw download speed (left side)
         painter.setPen(QtGui.QPen(self.line_dl, dash_thickness, QtCore.Qt.DashLine))
@@ -205,29 +205,33 @@ class GraphWindow(QtWidgets.QDialog):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
-            pos = e.pos()
+            pos = e.position().toPoint()
             grip = 16
             if pos.x() > self.width() - grip and pos.y() > self.height() - grip:
                 self._resizing = True
-                self._resize_start = (e.globalPos(), self.geometry())
+                self._resize_start = (e.globalPosition().toPoint(), self.geometry())
             else:
-                self._drag_offset = e.globalPos() - self.frameGeometry().topLeft()
+                self._drag_offset = (
+                    e.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                )
 
     def mouseMoveEvent(self, e):
         grip_size = 16
+        pos = e.position()
         in_grip_area = (
-            self.width() - grip_size < e.x() < self.width()
-            and self.height() - grip_size < e.y() < self.height()
+            self.width() - grip_size < pos.x() < self.width()
+            and self.height() - grip_size < pos.y() < self.height()
         )
         if self._resizing:
             start_pos, geom = self._resize_start
-            dx = e.globalX() - start_pos.x()
-            dy = e.globalY() - start_pos.y()
+            global_pos = e.globalPosition().toPoint()
+            dx = global_pos.x() - start_pos.x()
+            dy = global_pos.y() - start_pos.y()
             self.resize(max(200, geom.width() + dx), max(100, geom.height() + dy))
         elif in_grip_area:
             self.setCursor(Qt.SizeFDiagCursor)
         elif self._drag_offset and not self.locked:
-            self.move(e.globalPos() - self._drag_offset)
+            self.move(e.globalPosition().toPoint() - self._drag_offset)
             self.setCursor(Qt.ClosedHandCursor)
         else:
             self.setCursor(Qt.ArrowCursor)
@@ -244,20 +248,20 @@ class GraphWindow(QtWidgets.QDialog):
 
     def contextMenuEvent(self, event):
         menu = QtWidgets.QMenu(self)
-        atop = QtWidgets.QAction("Always On Top", self, checkable=True)
+        atop = QAction("Always On Top", self, checkable=True)
         atop.setChecked(self.always_on_top)
         atop.triggered.connect(self._toggle_always_on_top)
         menu.addAction(atop)
-        lock = QtWidgets.QAction("Lock Position", self, checkable=True)
+        lock = QAction("Lock Position", self, checkable=True)
         lock.setChecked(self.locked)
         lock.triggered.connect(self._toggle_lock)
         menu.addAction(lock)
-        swap_colors = QtWidgets.QAction("Swap Colors", self)
+        swap_colors = QAction("Swap Colors", self)
         swap_colors.triggered.connect(self._swap_colors)
         menu.addAction(swap_colors)
         menu.addSeparator()
         menu.addAction("Close", self.close)
-        menu.exec_(event.globalPos())
+        menu.exec(event.globalPos())
 
     def _toggle_always_on_top(self, on):
         self.always_on_top = bool(on)
@@ -277,8 +281,6 @@ class GraphWindow(QtWidgets.QDialog):
 
     def apply_settings(self):
         d = self.config.data
-        self.interval = d.get("update_interval", 1.0)
-        self.timer.setInterval(int(self.interval * 1000))
         new_max = d.get("graph_history", 60)
         if new_max != self.max_history:
             # Rebuild deques at the new size, keeping the most recent samples.
@@ -301,8 +303,5 @@ class GraphWindow(QtWidgets.QDialog):
         self.update()
 
     def closeEvent(self, event):
-        self.timer.stop()
-        self.config.data["graph_visible"] = False
-        self.config.save()
-        self.closed.emit()  # Emit signal to notify main widget
+        self.closed.emit()
         event.accept()

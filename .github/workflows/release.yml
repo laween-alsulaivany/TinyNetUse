@@ -1,0 +1,224 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14.7"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Verify release version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v(\d+\.\d+\.\d+)$') {
+            throw "Release tags must look like v1.2.3"
+          }
+
+          $tagVersion = $Matches[1]
+          $appVersion = & python .\build_version_info.py --print-version
+          $appVersion = $appVersion.Trim()
+
+          if ($tagVersion -ne $appVersion) {
+            throw "Tag version $tagVersion does not match src/tinynetuse/version.py ($appVersion)"
+          }
+
+          "version=$appVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Install locked dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install --requirement requirements.lock
+          .\.venv\Scripts\python.exe -m pip install --no-build-isolation --no-deps --editable .
+
+      - name: Check Python syntax
+        shell: pwsh
+        run: |
+          $files = git ls-files "*.py"
+          .\.venv\Scripts\python.exe -m py_compile $files
+
+      - name: Run tests
+        run: .\.venv\Scripts\python.exe -m pytest
+
+      - name: Build installer
+        run: .\build.bat
+
+      - name: Build portable executable
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --icon=assets\windows-classic\TinyNetUse.ico `
+            --version-file=build\windows-version-info.txt `
+            --name TinyNetUse `
+            --distpath dist\portable `
+            --workpath build\portable `
+            --add-data "assets;assets" `
+            --hidden-import win32com.client `
+            --hidden-import win32com.shell `
+            --hidden-import pythoncom `
+            main.py
+
+      - name: Verify binary metadata
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $expectedFileVersion = "$env:APP_VERSION.0"
+          $appPaths = @(
+            ".\dist\TinyNetUse\TinyNetUse.exe",
+            ".\dist\portable\TinyNetUse.exe"
+          )
+
+          foreach ($path in $appPaths) {
+            $info = (Get-Item -LiteralPath $path).VersionInfo
+            if ($info.ProductName.Trim() -ne "TinyNetUse" -or
+                $info.CompanyName.Trim() -ne "Laween Al-Sulaivany" -or
+                $info.ProductVersion.Trim() -ne $env:APP_VERSION -or
+                $info.FileVersion.Trim() -ne $expectedFileVersion) {
+              throw "Incorrect version metadata in $path"
+            }
+          }
+
+          $setupPath = ".\installer\TinyNetUse-Setup-$env:APP_VERSION.exe"
+          $setupInfo = (Get-Item -LiteralPath $setupPath).VersionInfo
+          $validSetupFileVersions = @($env:APP_VERSION, $expectedFileVersion)
+          if ($setupInfo.ProductName.Trim() -ne "TinyNetUse" -or
+              $setupInfo.CompanyName.Trim() -ne "Laween Al-Sulaivany" -or
+              $setupInfo.ProductVersion.Trim() -ne $env:APP_VERSION -or
+              $setupInfo.FileVersion.Trim() -notin $validSetupFileVersions) {
+            throw "Incorrect version metadata in $setupPath"
+          }
+
+      - name: Stage unsigned build
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Path .\release-candidates -Force | Out-Null
+          Copy-Item ".\installer\TinyNetUse-Setup-$env:APP_VERSION.exe" .\release-candidates\
+          Copy-Item .\dist\portable\TinyNetUse.exe ".\release-candidates\TinyNetUse-Portable-$env:APP_VERSION.exe"
+
+      - name: Upload unsigned build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-build-${{ steps.version.outputs.version }}
+          path: release-candidates
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  # SignPath goes between build and package later. Package should only use its signed output.
+  package:
+    needs: build
+    runs-on: windows-2025
+    timeout-minutes: 10
+    env:
+      APP_VERSION: ${{ needs.build.outputs.version }}
+
+    steps:
+      - name: Download build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: unsigned-build-${{ needs.build.outputs.version }}
+          path: release-candidates
+
+      - name: Package release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .\release-assets -Force | Out-Null
+          New-Item -ItemType Directory -Path .\portable-package -Force | Out-Null
+
+          $setupName = "TinyNetUse-Setup-$env:APP_VERSION.exe"
+          $portableName = "TinyNetUse-Portable-$env:APP_VERSION.zip"
+          Copy-Item ".\release-candidates\$setupName" ".\release-assets\$setupName"
+          Copy-Item ".\release-candidates\TinyNetUse-Portable-$env:APP_VERSION.exe" ".\portable-package\TinyNetUse.exe"
+          New-Item -ItemType File -Path .\portable-package\portable.flag -Force | Out-Null
+
+          $portableFiles = @(
+            ".\portable-package\TinyNetUse.exe",
+            ".\portable-package\portable.flag"
+          )
+          Compress-Archive -LiteralPath $portableFiles `
+            -DestinationPath ".\release-assets\$portableName" `
+            -CompressionLevel NoCompression
+
+          $hashes = foreach ($file in Get-ChildItem .\release-assets -File | Sort-Object Name) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $hashes | Set-Content .\release-assets\SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-assets-${{ needs.build.outputs.version }}
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  publish:
+    needs:
+      - build
+      - package
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      APP_VERSION: ${{ needs.build.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-assets-${{ needs.build.outputs.version }}
+          path: release-assets
+
+      - name: Create GitHub release
+        shell: pwsh
+        run: |
+          gh release create $env:RELEASE_TAG `
+            ".\release-assets\TinyNetUse-Setup-$env:APP_VERSION.exe" `
+            ".\release-assets\TinyNetUse-Portable-$env:APP_VERSION.zip" `
+            .\release-assets\SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY `
+            --verify-tag `
+            --generate-notes `
+            --title "TinyNetUse $env:APP_VERSION"
