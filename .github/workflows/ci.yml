@@ -49,3 +49,13 @@ jobs:
 
       - name: Run tests
         run: .\.venv\Scripts\python.exe -m pytest
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          .\build.bat
+          $version = & .\.venv\Scripts\python.exe .\build_version_info.py --print-version
+          $setupPath = ".\installer\TinyNetUse-Setup-$($version.Trim()).exe"
+          if (-not (Test-Path -LiteralPath $setupPath)) {
+            throw "Installer build did not create $setupPath"
+          }

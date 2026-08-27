@@ -112,6 +112,64 @@ def test_windows_route_lookup_returns_the_interface_alias(monkeypatch):
     assert windows_default_adapter() == "Ethernet"
 
 
+@pytest.mark.parametrize(
+    "failure_stage",
+    ["best_interface", "index_to_luid", "luid_to_alias"],
+)
+def test_windows_route_lookup_returns_none_when_a_native_call_fails(
+    monkeypatch, failure_stage
+):
+    def get_best_interface(destination, index_pointer):
+        if failure_stage == "best_interface":
+            return 1
+        ctypes.cast(index_pointer, ctypes.POINTER(ctypes.c_ulong)).contents.value = 7
+        return 0
+
+    def index_to_luid(interface_index, luid_pointer):
+        if failure_stage == "index_to_luid":
+            return 1
+        ctypes.cast(luid_pointer, ctypes.POINTER(ctypes.c_uint64)).contents.value = 99
+        return 0
+
+    def luid_to_alias(luid_pointer, alias, length):
+        if failure_stage == "luid_to_alias":
+            return 1
+        alias.value = "Ethernet"
+        return 0
+
+    fake_ip_helper = SimpleNamespace(
+        GetBestInterfaceEx=FakeFunction(get_best_interface),
+        ConvertInterfaceIndexToLuid=FakeFunction(index_to_luid),
+        ConvertInterfaceLuidToAlias=FakeFunction(luid_to_alias),
+    )
+    monkeypatch.setattr(sampling_module.sys, "platform", "win32")
+    monkeypatch.setattr(
+        sampling_module.ctypes,
+        "WinDLL",
+        lambda name: fake_ip_helper,
+        raising=False,
+    )
+
+    assert windows_default_adapter() is None
+
+
+def test_windows_route_lookup_returns_none_when_ip_helper_is_unavailable(
+    monkeypatch,
+):
+    def unavailable_ip_helper(name):
+        raise OSError("iphlpapi unavailable")
+
+    monkeypatch.setattr(sampling_module.sys, "platform", "win32")
+    monkeypatch.setattr(
+        sampling_module.ctypes,
+        "WinDLL",
+        unavailable_ip_helper,
+        raising=False,
+    )
+
+    assert windows_default_adapter() is None
+
+
 def test_discovery_keeps_active_physical_and_virtual_adapters():
     stats, addresses = network_state()
     per_adapter = {
@@ -192,6 +250,21 @@ def test_auto_uses_adapter_selected_by_windows_route():
     assert sampler.sample() == pytest.approx((100, 200))
 
 
+def test_auto_matches_the_windows_route_alias_case_insensitively():
+    sampler = make_sampler(
+        [
+            {"Ethernet": counters(100, 200), "VPN": counters(1000, 2000)},
+            {"Ethernet": counters(300, 600), "VPN": counters(3000, 6000)},
+        ],
+        [1.0, 3.0],
+        selected=AUTO_ADAPTER,
+        route_resolver=lambda: "ethernet",
+    )
+
+    assert sampler.active_adapters == ("Ethernet",)
+    assert sampler.sample() == pytest.approx((100, 200))
+
+
 def test_auto_fallback_aggregates_active_adapters():
     sampler = make_sampler(
         [
@@ -205,6 +278,25 @@ def test_auto_fallback_aggregates_active_adapters():
 
     assert sampler.active_adapters == ("Ethernet", "VPN")
     assert sampler.sample() == pytest.approx((300, 500))
+
+
+def test_auto_mode_with_no_usable_adapters_reports_zero_rates():
+    sampler = NetworkSampler(
+        selected_adapter=AUTO_ADAPTER,
+        counter_reader=sequence(
+            [
+                {"Loopback": counters(100, 200)},
+                {"Loopback": counters(300, 600)},
+            ]
+        ),
+        stats_reader=lambda: {"Loopback": adapter_stats()},
+        address_reader=lambda: {"Loopback": [address("127.0.0.1")]},
+        route_resolver=lambda: None,
+        clock=sequence([1.0, 3.0]),
+    )
+
+    assert sampler.active_adapters == ()
+    assert sampler.sample() == (0, 0)
 
 
 def test_selected_adapter_disappears_and_falls_back_to_auto():

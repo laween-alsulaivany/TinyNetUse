@@ -1,10 +1,45 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-from PySide6 import QtWidgets
+from PySide6 import QtGui, QtWidgets
 
+import tinynetuse.app as app_module
 from tinynetuse.app import TinyNetUseWidget
+from tinynetuse.config import Config
+
+
+class StubSampler:
+    def __init__(self, samples):
+        self.selected_adapter = "Ethernet"
+        self.source_revision = 0
+        self._samples = iter(samples)
+
+    def set_adapter(self, adapter):
+        return False
+
+    def sample(self):
+        return next(self._samples)
+
+
+def make_widget(tmp_path, qtbot, monkeypatch, samples):
+    config = Config(tmp_path / "config.json")
+    config.data.update(
+        {
+            "network_adapter": "Ethernet",
+            "unit": "MB/s",
+            "precision": 1,
+            "notify_threshold": {"download": 1, "upload": None},
+            "alert_color": "#123456",
+        }
+    )
+    config.save()
+    sampler = StubSampler(samples)
+    monkeypatch.setattr(app_module, "Config", lambda: config)
+    monkeypatch.setattr(app_module, "NetworkSampler", lambda adapter: sampler)
+    monkeypatch.setattr(TinyNetUseWidget, "_setup_tray", lambda self: None)
+    widget = TinyNetUseWidget()
+    qtbot.addWidget(widget)
+    return widget, sampler
 
 
 def menu_owner(visible=True):
@@ -62,75 +97,74 @@ def test_menu_offers_show_when_overlay_is_hidden(qtbot):
     assert menu.actions()[0].text() == "Show Overlay"
 
 
-def test_overlay_visibility_action_hides_or_restores():
-    visible = SimpleNamespace(
-        isVisible=lambda: True,
-        hide=Mock(),
-        show_overlay=Mock(),
-    )
-    hidden = SimpleNamespace(
-        isVisible=lambda: False,
-        hide=Mock(),
-        show_overlay=Mock(),
-    )
-
-    TinyNetUseWidget.toggle_overlay_visibility(visible)
-    TinyNetUseWidget.toggle_overlay_visibility(hidden)
-
-    visible.hide.assert_called_once()
-    visible.show_overlay.assert_not_called()
-    hidden.hide.assert_not_called()
-    hidden.show_overlay.assert_called_once()
-
-
-def test_reopening_graph_reuses_the_existing_window():
-    graph = Mock()
-    graph.isVisible.return_value = False
-    owner = SimpleNamespace(
-        graph_visible=False,
-        graph_window=graph,
-        config=SimpleNamespace(data={}, save=Mock()),
-    )
-
-    TinyNetUseWidget.toggle_graph(owner, True)
-
-    assert owner.graph_window is graph
-    graph.clear_history.assert_called_once()
-    graph.show.assert_called_once()
-    graph.raise_.assert_called_once()
-    graph.activateWindow.assert_called_once()
-    owner.config.save.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    ("sent", "received", "download_threshold", "upload_threshold", "active"),
-    [
-        (50, 50, None, None, False),
-        (50, 101, 100, None, True),
-        (101, 50, None, 100, True),
-        (100, 100, 100, 100, False),
-    ],
-)
-def test_overlay_highlights_for_either_threshold(
-    sent, received, download_threshold, upload_threshold, active
+def test_overlay_visibility_toggle_changes_a_real_widget(
+    tmp_path, qtbot, monkeypatch
 ):
-    sampler = Mock()
-    sampler.source_revision = 0
-    sampler.selected_adapter = "auto"
-    sampler.sample.return_value = (sent, received)
-    owner = SimpleNamespace(
-        sampler=sampler,
-        config=SimpleNamespace(data={"network_adapter": "auto"}, save=Mock()),
-        graph_window=None,
-        dl_label=Mock(),
-        ul_label=Mock(),
-        unit="B/s",
-        precision=0,
-        download_threshold=download_threshold,
-        upload_threshold=upload_threshold,
-        update=Mock(),
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
     )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
 
-    TinyNetUseWidget._update_speeds(owner)
+    widget.toggle_overlay_visibility()
+    assert not widget.isVisible()
 
-    assert owner._alert_active is active
+    widget.toggle_overlay_visibility()
+    assert widget.isVisible()
+
+
+def test_reopening_graph_reuses_and_clears_the_real_window(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(100, 250), (100, 250)],
+    )
+    widget.toggle_graph(True)
+    graph = widget.graph_window
+    qtbot.addWidget(graph)
+    widget._update_speeds()
+
+    assert graph.last_ul == 100
+    assert graph.last_dl == 250
+
+    widget.toggle_graph(False)
+    widget.toggle_graph(True)
+
+    assert widget.graph_window is graph
+    assert graph.isVisible()
+    assert not any(graph.sent_hist)
+    assert not any(graph.recv_hist)
+
+
+def test_overlay_updates_labels_graph_and_alert_rendering(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(1_048_576, 2_097_152), (1_048_576, 2_097_152)],
+    )
+    widget.resize(240, 120)
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+    widget.toggle_graph(True)
+    graph = widget.graph_window
+    qtbot.addWidget(graph)
+
+    widget._update_speeds()
+
+    assert widget.dl_label.text() == f"{chr(0x2193)} 2.0 MB/s"
+    assert widget.ul_label.text() == f"{chr(0x2191)} 1.0 MB/s"
+    assert graph.last_dl == 2_097_152
+    assert graph.last_ul == 1_048_576
+    assert widget._alert_active
+    assert widget.grab().toImage().pixelColor(120, 100) == QtGui.QColor(
+        "#123456"
+    )
