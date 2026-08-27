@@ -1,5 +1,7 @@
 from unittest.mock import Mock
 
+from PySide6 import QtWidgets
+
 from tinynetuse.config import Config
 from tinynetuse.graph_window import GraphWindow
 
@@ -72,6 +74,23 @@ def test_swapping_graph_colors_updates_the_persisted_preferences(
     assert graph.line_ul.name() == "#123456"
     assert config.data["download_color"] == "#abcdef"
     assert config.data["upload_color"] == "#123456"
+
+
+def test_graph_labels_use_the_application_font_not_overlay_preferences(
+    tmp_path, qtbot
+):
+    config = Config(tmp_path / "config.json")
+    config.data.update({"font": "Segoe UI", "font_bold": True, "font_size": 14})
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+    graph.resize(600, 320)
+
+    label_font = graph._label_font()
+    application_font = QtWidgets.QApplication.font()
+
+    assert label_font.family() == application_font.family()
+    assert label_font.bold() == application_font.bold()
+    assert label_font.pointSize() == 12
 
 
 def test_graph_close_notifies_owner_without_saving_twice(tmp_path, qtbot):

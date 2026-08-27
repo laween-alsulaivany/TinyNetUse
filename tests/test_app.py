@@ -168,3 +168,25 @@ def test_overlay_updates_labels_graph_and_alert_rendering(
     assert widget.grab().toImage().pixelColor(120, 100) == QtGui.QColor(
         "#123456"
     )
+
+
+def test_overlay_font_settings_do_not_change_the_application_font(
+    tmp_path, qtbot, monkeypatch
+):
+    application_font = QtWidgets.QApplication.font()
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.config.data.update(
+        {"font": "Segoe UI", "font_size": 14, "font_bold": False}
+    )
+
+    widget.apply_settings()
+
+    assert QtWidgets.QApplication.font().key() == application_font.key()
+    assert widget.dl_label.font().family() == "Segoe UI"
+    assert widget.dl_label.font().pointSize() == 14
+    assert not widget.dl_label.font().bold()

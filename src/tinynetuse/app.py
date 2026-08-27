@@ -56,14 +56,6 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         self.setWindowIcon(app_icon)
         QtWidgets.QApplication.setWindowIcon(app_icon)
 
-        # ── Font ──
-        font_name = d.get("font", "Segoe UI")
-        font = QtGui.QFont(font_name, d.get("font_size", 10))
-        if not font.exactMatch():
-            # if font isn't available, fall back to a default font but dont overwrite the user's saved preference in case they install it later
-            font = QtGui.QFont("Segoe UI", d.get("font_size", 10))
-        QtWidgets.QApplication.setFont(font)
-
         # ── Labels ──
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -212,10 +204,6 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         for lbl in (self.dl_label, self.ul_label):
             lbl.setStyleSheet(f"color: {self.font_color}")
 
-        # TODO: Consider making font settings widget-specific rather than app-wide.
-        # Font family + size go app-wide so dialogs use the right typeface.
-        # Bold is widget-only — applying it globally would bold every menu and dialog.
-        QtWidgets.QApplication.setFont(QtGui.QFont(self.font, self.font_size))
         label_font = QtGui.QFont(self.font, self.font_size)
         label_font.setBold(self.font_bold)
         for lbl in (self.dl_label, self.ul_label):

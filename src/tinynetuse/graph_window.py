@@ -101,6 +101,12 @@ class GraphWindow(QtWidgets.QDialog):
         self.last_ul = 0.0
         self.update()
 
+    def _label_font(self):
+        font_size = max(6, min(12, self.width() * 0.02))
+        font = QtWidgets.QApplication.font()
+        font.setPointSize(int(font_size))
+        return font
+
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -154,11 +160,7 @@ class GraphWindow(QtWidgets.QDialog):
         draw_series(recv_values, self.line_dl)
         draw_series(sent_values, self.line_ul)
 
-        # Dynamic font size (6 to 12 points)
-        font_size = max(6, min(12, rect.width() * 0.02))  # 2% of width
-        font = QtGui.QFont(self.config.data.get("font", "Segoe UI"), int(font_size))
-        font.setBold(self.config.data.get("font_bold", False))
-        painter.setFont(font)
+        painter.setFont(self._label_font())
 
         # Calculate label positions
         last_dl = convert_rate(self.last_dl, display_unit)
@@ -294,9 +296,6 @@ class GraphWindow(QtWidgets.QDialog):
             self.recv_hist = deque(recv, maxlen=new_max)
         self.unit = d.get("unit", "MB/s")
         self.precision = d.get("precision", 2)
-        self.font = d.get("font", "Segoe UI")
-        self.font_bold = d.get("font_bold", False)
-        self.font_size = d.get("font_size", 10)
         self.setWindowOpacity(d.get("opacity", 1.0))
         self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))
         self.line_ul = QtGui.QColor(d.get("upload_color", "#FF8A65"))
