@@ -190,3 +190,33 @@ def test_overlay_font_settings_do_not_change_the_application_font(
     assert widget.dl_label.font().family() == "Segoe UI"
     assert widget.dl_label.font().pointSize() == 14
     assert not widget.dl_label.font().bold()
+
+
+def test_overlay_font_change_expands_and_saves_minimum_geometry(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.resize(100, 40)
+    widget.config.data.update(
+        {"font_size": 72, "widget_geometry": [0, 0, 100, 40]}
+    )
+
+    widget.apply_settings()
+
+    layout_minimum = widget.layout().minimumSize()
+    assert widget.minimumSize() == layout_minimum.expandedTo(
+        app_module.OVERLAY_MINIMUM_SIZE
+    )
+    assert widget.width() >= widget.minimumWidth()
+    assert widget.height() >= widget.minimumHeight()
+    assert widget.config.data["widget_geometry"] == [
+        widget.x(),
+        widget.y(),
+        widget.width(),
+        widget.height(),
+    ]

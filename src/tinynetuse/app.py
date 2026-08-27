@@ -217,6 +217,25 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             self.graph_window.apply_settings()
         # Immediately refresh
         self._update_speeds()
+        self._update_minimum_size()
+
+    def _update_minimum_size(self):
+        layout = self.layout()
+        assert layout is not None
+        layout.activate()
+        minimum_size = layout.minimumSize().expandedTo(OVERLAY_MINIMUM_SIZE)
+        self.setMinimumSize(minimum_size)
+        current_size = self.size()
+        if (
+            current_size.width() < minimum_size.width()
+            or current_size.height() < minimum_size.height()
+        ):
+            self.resize(current_size.expandedTo(minimum_size))
+
+        geometry = geometry_values(self.geometry())
+        if self.config.data.get("widget_geometry") != geometry:
+            self.config.data["widget_geometry"] = geometry
+            self.config.save()
 
     # Put both persistent windows back in their default locations.
     def reset_window_positions(self):
