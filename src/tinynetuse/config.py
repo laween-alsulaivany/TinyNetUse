@@ -58,6 +58,7 @@ COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 # Always return a fresh copy because notify_threshold is nested.
 def default_config() -> dict:
+    # callers can safely modify the result without touching the shared defaults
     return deepcopy(DEFAULTS)
 
 
@@ -85,7 +86,9 @@ def _valid_geometry(value) -> bool:
     return value[2] > 0 and value[3] > 0
 
 
+# Migrate older configuration versions to the current schema for backward compatibility.
 def _migrate(data: dict) -> dict:
+    # migrate a copy so validation never mutates the loaded JSON object
     migrated = deepcopy(data)
     version = migrated.get("config_version", 0)
 
@@ -107,6 +110,7 @@ def _migrate(data: dict) -> dict:
 
 # Keep validation close to the settings UI ranges.
 def validate_config(data) -> dict:
+    # rebuild from defaults so unknown or malformed settings never leak through
     if not isinstance(data, dict):
         return default_config()
 
@@ -170,6 +174,7 @@ def validate_config(data) -> dict:
     return clean
 
 
+# Find the local application data directory.
 def _local_app_data(local_app_data=None) -> Path:
     if local_app_data is not None:
         return Path(local_app_data)
@@ -180,7 +185,7 @@ def _local_app_data(local_app_data=None) -> Path:
     return Path.home() / "AppData" / "Local"
 
 
-# Portable mode is intentional: the marker must be beside the frozen EXE.
+# Check if the application is running in portable mode.
 def is_portable_mode(executable=None, frozen=None) -> bool:
     if frozen is None:
         frozen = bool(getattr(sys, "frozen", False))
@@ -190,19 +195,25 @@ def is_portable_mode(executable=None, frozen=None) -> bool:
 
 # Source settings use a separate local folder so the repository stays untouched.
 def resolve_config_path(frozen=None, executable=None, local_app_data=None) -> Path:
+
     if frozen is None:
         frozen = bool(getattr(sys, "frozen", False))
 
     executable = Path(executable or sys.executable)
     if is_portable_mode(executable, frozen):
+        # Portable build:   beside TinyNetUse.exe
         return executable.parent / CONFIG_FILENAME
 
     app_data = _local_app_data(local_app_data) / APP_NAME
     if frozen:
+        # Installed build:  %LOCALAPPDATA%\TinyNetUse\config.json
         return app_data / CONFIG_FILENAME
+    # Source run:       %LOCALAPPDATA%\TinyNetUse\dev\config.json
     return app_data / "dev" / CONFIG_FILENAME
 
 
+# Old location >> New location
+# C:\Program Files\TinyNetUse\config.json >> C:\Users\Laween\AppData\Local\TinyNetUse\config.json
 def _legacy_config_path() -> Path | None:
     frozen = bool(getattr(sys, "frozen", False))
     executable = Path(sys.executable)
@@ -212,11 +223,13 @@ def _legacy_config_path() -> Path | None:
 
 
 def _read_json(path: Path):
+    # keep file parsing in one place so the load and legacy migration behave the same
     with path.open("r", encoding="utf-8") as file:
         return json.load(file)
 
 
 def _preserve_corrupt_file(path: Path) -> None:
+    # keep the bad file available for diagnosis before replacing its settings, just in case
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup = path.with_name(f"{path.name}.corrupt-{stamp}")
     try:
@@ -227,6 +240,7 @@ def _preserve_corrupt_file(path: Path) -> None:
 
 class Config:
     def __init__(self, path=None):
+        # explicit paths are used by tests and must not trigger legacy discovery
         custom_path = path is not None
         self.path = Path(path) if custom_path else resolve_config_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -243,6 +257,7 @@ class Config:
             self._load()
 
     def _load(self) -> None:
+        # create a usable config immediately when no file exists yet
         if not self.path.exists():
             self.data = default_config()
             self.save()
@@ -251,6 +266,7 @@ class Config:
         try:
             loaded = _read_json(self.path)
         except (json.JSONDecodeError, UnicodeDecodeError):
+            # preserve malformed settings, then start from a clean configuration
             _preserve_corrupt_file(self.path)
             self.data = default_config()
             self.save()
@@ -261,6 +277,7 @@ class Config:
             self.save()
 
     def _load_legacy(self, legacy_path: Path) -> None:
+        # import the old EXE-side file once, then continue using the resolved path
         try:
             loaded = _read_json(legacy_path)
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -277,6 +294,7 @@ class Config:
             pass
 
     def save(self) -> None:
+        # write beside the target and replace it only after the complete file is flushed
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.data = validate_config(self.data)
         temp_path = None

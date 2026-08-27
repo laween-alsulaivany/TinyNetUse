@@ -9,11 +9,7 @@ from PySide6.QtCore import Qt, QRectF
 
 from tinynetuse.about_dialog import AboutDialog
 from tinynetuse.config import Config
-from tinynetuse.geometry import (
-    dock_window,
-    geometry_values,
-    restore_window_geometry,
-)
+from tinynetuse.geometry import dock_window, geometry_values, restore_window_geometry
 from tinynetuse.graph_window import GraphWindow
 from tinynetuse.network import NetworkSampler
 from tinynetuse.settings_dialog import SettingsDialog
@@ -46,10 +42,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         self.setMinimumSize(OVERLAY_MINIMUM_SIZE)
         self.resize(OVERLAY_DEFAULT_SIZE)
         base_flags = Qt.FramelessWindowHint | Qt.Tool
-        self.setWindowFlags(
-            base_flags
-            | (Qt.WindowStaysOnTopHint if d.get("widget_always_on_top") else 0)
-        )
+        self.setWindowFlags(base_flags | (Qt.WindowStaysOnTopHint if d.get("widget_always_on_top") else 0))
         self.setWindowOpacity(d.get("opacity", 1.0))
         self.always_on_top = d.get("widget_always_on_top", True)
 
@@ -67,8 +60,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         font_name = d.get("font", "Segoe UI")
         font = QtGui.QFont(font_name, d.get("font_size", 10))
         if not font.exactMatch():
-            # Font isn't available - fall back for rendering but don't overwrite
-            # the user's saved preference; they might just need to install the font.
+            # if font isn't available, fall back to a default font but dont overwrite the user's saved preference in case they install it later
             font = QtGui.QFont("Segoe UI", d.get("font_size", 10))
         QtWidgets.QApplication.setFont(font)
 
@@ -220,6 +212,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         for lbl in (self.dl_label, self.ul_label):
             lbl.setStyleSheet(f"color: {self.font_color}")
 
+        # TODO: Consider making font settings widget-specific rather than app-wide.
         # Font family + size go app-wide so dialogs use the right typeface.
         # Bold is widget-only — applying it globally would bold every menu and dialog.
         QtWidgets.QApplication.setFont(QtGui.QFont(self.font, self.font_size))

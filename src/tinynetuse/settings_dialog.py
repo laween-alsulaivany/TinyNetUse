@@ -7,18 +7,8 @@ from PySide6.QtGui import QColor
 
 from tinynetuse.config import Config, default_config, validate_config
 from tinynetuse.network import AUTO_ADAPTER, AUTO_ADAPTER_LABEL
-from tinynetuse.startup import (
-    disable_startup,
-    enable_startup,
-    is_startup_enabled,
-    startup_shortcut_exists,
-)
-from tinynetuse.units import (
-    SUPPORTED_UNITS,
-    THRESHOLD_UNIT,
-    threshold_from_display,
-    threshold_to_display,
-)
+from tinynetuse.startup import disable_startup, enable_startup, is_startup_enabled, startup_shortcut_exists
+from tinynetuse.units import SUPPORTED_UNITS, THRESHOLD_UNIT, threshold_from_display, threshold_to_display
 
 
 COLOR_KEYS = ("alert_color", "download_color", "upload_color", "font_color")
@@ -90,14 +80,8 @@ class SettingsDialog(QtWidgets.QDialog):
             "download": self.download_threshold_spin,
             "upload": self.upload_threshold_spin,
         }
-        layout.addRow(
-            "Highlight when download exceeds:",
-            self.download_threshold_spin,
-        )
-        layout.addRow(
-            "Highlight when upload exceeds:",
-            self.upload_threshold_spin,
-        )
+        layout.addRow("Highlight when download exceeds:", self.download_threshold_spin)
+        layout.addRow("Highlight when upload exceeds:", self.upload_threshold_spin)
 
         self.opacity_spin = QtWidgets.QDoubleSpinBox()
         self.opacity_spin.setRange(20, 100)
@@ -137,6 +121,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.boot_chk = QtWidgets.QCheckBox("Launch at Startup")
         layout.addRow(self.boot_chk)
 
+        # set the initial threshold unit for the display
         self._threshold_unit = THRESHOLD_UNIT
         self._update_threshold_display(THRESHOLD_UNIT)
         self.unit_combo.currentTextChanged.connect(self._on_unit_changed)

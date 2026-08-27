@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 import sys
 
-import pythoncom
-import win32com.client
+import pythoncom  # Required for COM initialization when handling Windows shortcuts
+import win32com.client  # Required for creating and reading Windows shortcuts
 
 
 SHORTCUT_NAME = "TinyNetUse.lnk"
@@ -27,12 +27,13 @@ def startup_shortcut_exists() -> bool:
     return startup_shortcut_path().is_file()
 
 
-# Frozen apps always point at sys.executable, never PyInstaller's temp folder.
+# Frozen apps always point at sys.executable, and not the PyInstaller's temp folder.
 def _startup_command():
     executable = Path(sys.executable).resolve()
     if getattr(sys, "frozen", False):
         return executable, "", executable.parent, executable
 
+    # Non-frozen apps point at the Python interpreter and the script location.
     project_root = Path(__file__).resolve().parents[2]
     script = project_root / "main.py"
     icon = project_root / "assets" / "windows-classic" / "TinyNetUse.ico"
