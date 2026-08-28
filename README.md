@@ -85,6 +85,12 @@ Report bugs or request changes through [GitHub Issues](https://github.com/laween
 
 TinyNetUse is open source under the [MIT License](LICENSE).
 
+## Code signing policy
+
+See the [TinyNetUse Code signing policy](CODE_SIGNING_POLICY.md).
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+
 ## Development
 
 Source setup, testing, build, and release instructions are in [DEVELOPMENT.md](DEVELOPMENT.md).
