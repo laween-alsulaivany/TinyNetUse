@@ -6,6 +6,9 @@ import pytest
 import tinynetuse.startup as startup_module
 
 
+ROOT = Path(__file__).parents[1]
+
+
 def set_startup_folder(tmp_path, monkeypatch):
     folder = tmp_path / "Startup"
     monkeypatch.setattr(startup_module, "STARTUP_FOLDER", folder)
@@ -140,7 +143,9 @@ def test_installer_shortcut_uses_the_same_entry_and_is_valid(
         "_read_shortcut",
         lambda path: (str(installed_exe), ""),
     )
-    installer = Path("packaging/installer.iss").read_text(encoding="utf-8")
+    installer = (ROOT / "packaging" / "installer.iss").read_text(
+        encoding="utf-8"
+    )
 
     assert 'Name: "{userstartup}\\{#AppName}"' in installer
     assert startup_module.startup_shortcut_path().name == "TinyNetUse.lnk"

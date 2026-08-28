@@ -1,5 +1,7 @@
 from unittest.mock import Mock
 
+from PySide6 import QtWidgets
+
 from tinynetuse.config import Config
 from tinynetuse.graph_window import GraphWindow
 
@@ -30,6 +32,65 @@ def test_graph_history_is_cleared_when_network_source_changes(tmp_path, qtbot):
     assert not any(graph.recv_hist)
     assert graph.last_ul == 0
     assert graph.last_dl == 0
+
+
+def test_graph_resizes_history_without_discarding_recent_samples(
+    tmp_path, qtbot
+):
+    config = Config(tmp_path / "config.json")
+    config.data["graph_history"] = 3
+    config.save()
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+    graph.add_sample(10, 100)
+    graph.add_sample(20, 200)
+
+    config.data["graph_history"] = 5
+    graph.apply_settings()
+
+    assert list(graph.sent_hist) == [0.0, 0.0, 0.0, 10, 20]
+    assert list(graph.recv_hist) == [0.0, 0.0, 0.0, 100, 200]
+
+    config.data["graph_history"] = 2
+    graph.apply_settings()
+
+    assert list(graph.sent_hist) == [10, 20]
+    assert list(graph.recv_hist) == [100, 200]
+
+
+def test_swapping_graph_colors_updates_the_persisted_preferences(
+    tmp_path, qtbot
+):
+    config = Config(tmp_path / "config.json")
+    config.data["download_color"] = "#123456"
+    config.data["upload_color"] = "#abcdef"
+    config.save()
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+
+    graph._swap_colors()
+
+    assert graph.line_dl.name() == "#abcdef"
+    assert graph.line_ul.name() == "#123456"
+    assert config.data["download_color"] == "#abcdef"
+    assert config.data["upload_color"] == "#123456"
+
+
+def test_graph_labels_use_the_application_font_not_overlay_preferences(
+    tmp_path, qtbot
+):
+    config = Config(tmp_path / "config.json")
+    config.data.update({"font": "Segoe UI", "font_bold": True, "font_size": 14})
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+    graph.resize(600, 320)
+
+    label_font = graph._label_font()
+    application_font = QtWidgets.QApplication.font()
+
+    assert label_font.family() == application_font.family()
+    assert label_font.bold() == application_font.bold()
+    assert label_font.pointSize() == 12
 
 
 def test_graph_close_notifies_owner_without_saving_twice(tmp_path, qtbot):

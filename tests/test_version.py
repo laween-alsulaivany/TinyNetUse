@@ -10,13 +10,19 @@ from tinynetuse.version import __version__
 ROOT = Path(__file__).parents[1]
 
 
-def test_pyproject_uses_the_canonical_python_version():
+def test_pyproject_uses_the_canonical_package_version():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert project["project"]["dynamic"] == ["version"]
     assert project["tool"]["setuptools"]["dynamic"]["version"] == {
         "attr": "tinynetuse.version.__version__"
     }
+
+
+def test_pyproject_declares_the_supported_python_range():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert project["project"]["requires-python"] == ">=3.14,<3.15"
 
 
 def test_project_uses_the_src_package_entry_point():

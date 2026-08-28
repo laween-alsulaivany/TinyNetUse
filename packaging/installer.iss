@@ -139,21 +139,32 @@ begin
       AddBackslash(ConfigDir) + 'config.json', False);
 end;
 
+function InitializeUninstall(): Boolean;
+var
+  Choice: Integer;
+begin
+  Result := True;
+  { Silent package-manager uninstalls keep settings by default. }
+  RemoveUserData := False;
+  if (not UninstallSilent) and
+    DirExists(ExpandConstant('{localappdata}\{#AppName}')) then
+  begin
+    Choice := SuppressibleMsgBox(
+      'Keep your TinyNetUse settings?' + #13#10 + #13#10 +
+      'Choose Yes to keep them for a future installation.' + #13#10 +
+      'Choose No to remove saved preferences and window positions.' + #13#10 +
+      'Choose Cancel to abort the uninstall.',
+      mbConfirmation, MB_YESNOCANCEL, IDYES);
+
+    case Choice of
+      IDNO: RemoveUserData := True;
+      IDCANCEL: Result := False;
+    end;
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if CurUninstallStep = usUninstall then
-  begin
-    { Silent package-manager uninstalls keep settings by default. }
-    RemoveUserData := False;
-    if (not UninstallSilent) and
-      DirExists(ExpandConstant('{localappdata}\{#AppName}')) then
-      RemoveUserData := SuppressibleMsgBox(
-        'Keep your TinyNetUse settings?' + #13#10 + #13#10 +
-        'Choose Yes to keep them for a future installation.' + #13#10 +
-        'Choose No to remove saved preferences and window positions.',
-        mbConfirmation, MB_YESNO, IDYES) = IDNO;
-  end;
-
   if (CurUninstallStep = usPostUninstall) and RemoveUserData then
     DelTree(ExpandConstant('{localappdata}\{#AppName}'), True, True, True);
 end;
