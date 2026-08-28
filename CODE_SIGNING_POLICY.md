@@ -38,7 +38,7 @@ TinyNetUse does not send telemetry or collect usage data.
 
 The application reads network byte counters provided locally by Windows to calculate current upload and download speeds. It does not inspect packet contents.
 
-TinyNetUse will not transfer information to other networked systems unless specifically requested by the user, such as when the user chooses to open a project or release link in their web browser.
+TinyNetUse will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. For example, project and release links open GitHub in the user's default browser only when the user chooses to open them.
 
 For additional details, see the Privacy and network behavior section of the project README.
 

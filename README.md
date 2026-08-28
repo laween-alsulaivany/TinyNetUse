@@ -31,7 +31,11 @@ For most users, choose **`TinyNetUse-Setup-<version>.exe`**. The installer sets 
 
 The portable download runs without installation. Keep `portable.flag` beside `TinyNetUse.exe` so its settings stay in the same folder.
 
-Neither download requires Python. Current release builds are not code-signed, so Windows SmartScreen may show a warning when you first run them.
+Neither download requires Python.
+
+TinyNetUse is applying to use SignPath Foundation for code signing of official Windows releases. See the [Code signing policy](#code-signing-policy) for details.
+
+Current release builds are not yet code-signed, so Windows SmartScreen may show a warning when you first run them.
 
 ## Features
 
