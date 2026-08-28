@@ -1,7 +1,7 @@
 """Generate the Windows version resource used by PyInstaller."""
 
-from tinynetuse.version import __version__
 import argparse
+import importlib
 from pathlib import Path
 import re
 import sys
@@ -10,6 +10,8 @@ import sys
 SOURCE_DIR = Path(__file__).resolve().parent / "src"
 # load the package version from the source tree when this script runs from the repo
 sys.path.insert(0, str(SOURCE_DIR))
+
+__version__ = importlib.import_module("tinynetuse.version").__version__
 
 
 PRODUCT_NAME = "TinyNetUse"
