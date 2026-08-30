@@ -324,12 +324,43 @@ def test_settings_controls_are_grouped_by_scope(tmp_path, qtbot, monkeypatch):
     assert dialog.widget_group.layout().indexOf(dialog.opacity_spin) >= 0
     assert dialog.graph_group.layout().indexOf(dialog.btn_dl) >= 0
     assert dialog.graph_group.layout().indexOf(dialog.btn_ul) >= 0
+    assert dialog.graph_group.layout().indexOf(dialog.graph_opacity_spin) >= 0
     assert dialog.graph_group.layout().labelForField(dialog.btn_dl).text() == (
         "Graph Download Color:"
     )
     assert dialog.graph_group.layout().labelForField(dialog.btn_ul).text() == (
         "Graph Upload Color:"
     )
+
+
+def test_graph_style_is_selected_and_saved(tmp_path, qtbot, monkeypatch):
+    dialog, _, config = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    assert [
+        dialog.graph_style_combo.itemData(index)
+        for index in range(dialog.graph_style_combo.count())
+    ] == ["centered", "stacked", "overlay"]
+    assert dialog.graph_style_combo.currentData() == "centered"
+
+    dialog.graph_style_combo.setCurrentIndex(
+        dialog.graph_style_combo.findData("stacked")
+    )
+    dialog.accept()
+
+    assert config.data["graph_style"] == "stacked"
+
+
+def test_graph_opacity_is_saved_separately_from_overlay_opacity(
+    tmp_path, qtbot, monkeypatch
+):
+    dialog, _, config = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    dialog.opacity_spin.setValue(60)
+    dialog.graph_opacity_spin.setValue(90)
+    dialog.accept()
+
+    assert config.data["opacity"] == 0.6
+    assert config.data["graph_opacity"] == 0.9
 
 
 def test_opacity_control_enforces_safe_range(tmp_path, qtbot, monkeypatch):

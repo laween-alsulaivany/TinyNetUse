@@ -36,7 +36,7 @@ class GraphWindow(QtWidgets.QDialog):
         flags = base | (Qt.WindowStaysOnTopHint if d.get("graph_always_on_top") else 0)
 
         # Match main widget opacity
-        self.setWindowOpacity(d.get("opacity", 1.0))
+        self.setWindowOpacity(d.get("graph_opacity", d.get("opacity", 1.0)))
         self.setWindowFlags(flags)
         self.always_on_top = d.get("graph_always_on_top", False)
         self.locked = d.get("graph_locked", False)
@@ -55,12 +55,13 @@ class GraphWindow(QtWidgets.QDialog):
 
         # ── Data & State ──
         self.max_history = d.get("graph_history", 60)
+        self.graph_style = d.get("graph_style", "centered")
         self.unit = d.get("unit", "MB/s")
         self.auto_minimum_unit = d.get("auto_unit_minimum", "B/s")
         self.precision = d.get("precision", 2)
         self.bg_color = QtGui.QColor(0, 0, 0, 220)
-        self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))
-        self.line_ul = QtGui.QColor(d.get("upload_color", "#FF8A65"))
+        self.line_dl = QtGui.QColor(d.get("download_color", "#2680EB"))
+        self.line_ul = QtGui.QColor(d.get("upload_color", "#D97706"))
         self.sent_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.recv_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.last_dl = 0.0
@@ -137,7 +138,6 @@ class GraphWindow(QtWidgets.QDialog):
         metrics = painter.fontMetrics()
         base_margin = max(8, min(rect.width(), rect.height()) * 0.02)
         legend_height = metrics.height() + 6
-        scale_min = f"{0:.{self.precision}f} {display_unit}"
 
         if not self.has_samples:
             painter.setPen(QtGui.QPen(QtGui.QColor("#B8C0CC")))
@@ -155,68 +155,90 @@ class GraphWindow(QtWidgets.QDialog):
         ]
         all_vals = sent_values + recv_values
         maxv = max(max(all_vals, default=0.0), 0.001) * 1.2
-        scale_max = f"{maxv:.{self.precision}f} {display_unit}"
+        scale_labels = self._scale_labels(maxv, display_unit)
         scale_width = max(
-            metrics.horizontalAdvance(scale_min),
-            metrics.horizontalAdvance(scale_max),
+            metrics.horizontalAdvance(label) for _, label in scale_labels
         )
         ox = base_margin + scale_width + 6
         oy = base_margin + legend_height
         w = rect.width() - ox - base_margin
         h = rect.height() - oy - base_margin - metrics.height()
 
-        legend_gap = 8
-        legend_width = max(1, int((w - legend_gap) / 2))
+        swatch_width = max(8, min(16, int(metrics.height() * 1.25)))
+        value_gap = 4
+        item_gap = 10
+        text_width = max(
+            1, int((w - 2 * (swatch_width + value_gap) - item_gap) / 2)
+        )
         dl_label = f"↓ {format_rate(self.last_dl, display_unit, self.precision)}"
         ul_label = f"↑ {format_rate(self.last_ul, display_unit, self.precision)}"
-        dl_label = metrics.elidedText(dl_label, Qt.ElideRight, legend_width)
-        ul_label = metrics.elidedText(ul_label, Qt.ElideRight, legend_width)
+        dl_label = metrics.elidedText(dl_label, Qt.ElideRight, text_width)
+        ul_label = metrics.elidedText(ul_label, Qt.ElideRight, text_width)
+        dl_width = swatch_width + value_gap + metrics.horizontalAdvance(dl_label)
+        ul_width = swatch_width + value_gap + metrics.horizontalAdvance(ul_label)
+        telemetry_width = dl_width + item_gap + ul_width
+        telemetry_x = ox + w - telemetry_width
+        telemetry_y = base_margin + legend_height / 2
+        telemetry_text_y = telemetry_y + (metrics.ascent() - metrics.descent()) / 2
         painter.setPen(QtGui.QPen(self.line_dl))
+        painter.drawLine(
+            QtCore.QPointF(telemetry_x, telemetry_y),
+            QtCore.QPointF(telemetry_x + swatch_width, telemetry_y),
+        )
         painter.drawText(
-            QRectF(ox, base_margin, legend_width, legend_height),
-            Qt.AlignLeft | Qt.AlignVCenter,
+            QtCore.QPointF(
+                telemetry_x + swatch_width + value_gap, telemetry_text_y
+            ),
             dl_label,
         )
+        upload_x = telemetry_x + dl_width + item_gap
         painter.setPen(QtGui.QPen(self.line_ul))
+        painter.drawLine(
+            QtCore.QPointF(upload_x, telemetry_y),
+            QtCore.QPointF(upload_x + swatch_width, telemetry_y),
+        )
         painter.drawText(
-            QRectF(ox + legend_width + legend_gap, base_margin, legend_width, legend_height),
-            Qt.AlignRight | Qt.AlignVCenter,
+            QtCore.QPointF(
+                upload_x + swatch_width + value_gap, telemetry_text_y
+            ),
             ul_label,
         )
 
-        for index in range(5):
-            y = oy + h * index / 4
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 38), 1))
+        for fraction in self._grid_fractions():
+            y = oy + h * fraction
+            alpha = 64 if fraction == 0.5 and self.graph_style != "overlay" else 38
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, alpha), 1))
             painter.drawLine(QtCore.QPointF(ox, y), QtCore.QPointF(ox + w, y))
 
         painter.setPen(QtGui.QPen(QtGui.QColor("#B8C0CC")))
-        painter.drawText(
-            QRectF(base_margin, oy - metrics.height() / 2, scale_width, metrics.height()),
-            Qt.AlignRight | Qt.AlignVCenter,
-            scale_max,
-        )
-        painter.drawText(
-            QRectF(base_margin, oy + h - metrics.height() / 2, scale_width, metrics.height()),
-            Qt.AlignRight | Qt.AlignVCenter,
-            scale_min,
-        )
+        for fraction, label in scale_labels:
+            painter.drawText(
+                QRectF(
+                    base_margin,
+                    oy + h * fraction - metrics.height() / 2,
+                    scale_width,
+                    metrics.height(),
+                ),
+                Qt.AlignRight | Qt.AlignVCenter,
+                label,
+            )
 
         # Dynamic line thickness (1 to 3 pixels)
         line_thickness = max(1, min(3, rect.width() * 0.005))  # 0.5% of width
 
         # Draw graph lines
-        def draw_series(data, color):
+        def draw_series(data, color, direction):
             painter.setPen(QtGui.QPen(color, line_thickness))
             points = []
             for i, v in enumerate(data):
                 x = ox + i * (w / (len(data) - 1))
-                y = oy + h - (v / maxv) * h
+                y = self._value_to_y(v, maxv, oy, h, direction)
                 points.append(QtCore.QPointF(x, y))
             if len(points) > 1:
                 painter.drawPolyline(points)
 
-        draw_series(recv_values, self.line_dl)
-        draw_series(sent_values, self.line_ul)
+        draw_series(recv_values, self.line_dl, "download")
+        draw_series(sent_values, self.line_ul, "upload")
 
         self._draw_border_and_resize_grip(painter, rect)
 
@@ -230,6 +252,33 @@ class GraphWindow(QtWidgets.QDialog):
             painter.drawLine(
                 self.width() - i, self.height(), self.width(), self.height() - i
             )
+
+    def _grid_fractions(self):
+        return (0.0, 0.25, 0.5, 0.75, 1.0)
+
+    def _scale_labels(self, maximum, unit):
+        maximum_label = f"{maximum:.{self.precision}f} {unit}"
+        zero_label = f"{0:.{self.precision}f} {unit}"
+        if self.graph_style == "centered":
+            return (
+                (0.0, maximum_label),
+                (0.5, zero_label),
+                (1.0, maximum_label),
+            )
+        return ((0.0, maximum_label), (1.0, zero_label))
+
+    def _value_to_y(self, value, maximum, top, height, direction):
+        if self.graph_style == "centered":
+            zero = top + height / 2
+            offset = value / maximum * height / 2
+            return zero - offset if direction == "download" else zero + offset
+        if self.graph_style == "stacked":
+            lane_height = height / 2
+            lane_bottom = top + lane_height
+            if direction == "upload":
+                lane_bottom += lane_height
+            return lane_bottom - value / maximum * lane_height
+        return top + height - value / maximum * height
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
@@ -337,11 +386,12 @@ class GraphWindow(QtWidgets.QDialog):
             self.sent_hist = deque(sent, maxlen=new_max)
             self.recv_hist = deque(recv, maxlen=new_max)
         self.unit = d.get("unit", "MB/s")
+        self.graph_style = d.get("graph_style", "centered")
         self.auto_minimum_unit = d.get("auto_unit_minimum", "B/s")
         self.precision = d.get("precision", 2)
-        self.setWindowOpacity(d.get("opacity", 1.0))
-        self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))
-        self.line_ul = QtGui.QColor(d.get("upload_color", "#FF8A65"))
+        self.setWindowOpacity(d.get("graph_opacity", d.get("opacity", 1.0)))
+        self.line_dl = QtGui.QColor(d.get("download_color", "#2680EB"))
+        self.line_ul = QtGui.QColor(d.get("upload_color", "#D97706"))
         self.update()
 
     def closeEvent(self, event):

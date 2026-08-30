@@ -5,7 +5,7 @@ from copy import deepcopy
 from PySide6 import QtGui, QtWidgets
 from PySide6.QtGui import QColor
 
-from tinynetuse.config import Config, default_config, validate_config
+from tinynetuse.config import GRAPH_STYLES, Config, default_config, validate_config
 from tinynetuse.network import AUTO_ADAPTER, AUTO_ADAPTER_LABEL
 from tinynetuse.startup import disable_startup, enable_startup, is_startup_enabled, startup_shortcut_exists
 from tinynetuse.units import AUTO_UNITS, SUPPORTED_UNITS, THRESHOLD_UNIT, threshold_from_display, threshold_to_display
@@ -19,11 +19,13 @@ RESET_KEYS = (
     "font_bold",
     "update_interval",
     "opacity",
+    "graph_opacity",
     "reduce_opacity_on_hover",
     "click_through_overlay",
     "alert_color",
     "download_color",
     "upload_color",
+    "graph_style",
     "network_adapter",
     "unit",
     "auto_unit_minimum",
@@ -126,7 +128,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.opacity_spin.setRange(20, 100)
         self.opacity_spin.setSingleStep(10)
         self.opacity_spin.setSuffix(" %")
-        widget_layout.addRow("Opacity:", self.opacity_spin)
+        widget_layout.addRow("Overlay Opacity:", self.opacity_spin)
 
         self.hover_opacity_check = QtWidgets.QCheckBox("Reduce opacity on hover")
         self.hover_opacity_help_button = QtWidgets.QToolButton()
@@ -215,6 +217,18 @@ class SettingsDialog(QtWidgets.QDialog):
         self.btn_ul.clicked.connect(lambda: self._pick("upload_color", self.btn_ul))
         graph_layout.addRow("Graph Upload Color:", self.btn_ul)
 
+        self.graph_style_combo = QtWidgets.QComboBox()
+        self.graph_style_combo.addItem("Centered", GRAPH_STYLES[0])
+        self.graph_style_combo.addItem("Stacked", GRAPH_STYLES[1])
+        self.graph_style_combo.addItem("Shared Overlay", GRAPH_STYLES[2])
+        graph_layout.addRow("Graph Style:", self.graph_style_combo)
+
+        self.graph_opacity_spin = QtWidgets.QDoubleSpinBox()
+        self.graph_opacity_spin.setRange(20, 100)
+        self.graph_opacity_spin.setSingleStep(10)
+        self.graph_opacity_spin.setSuffix(" %")
+        graph_layout.addRow("Graph Opacity:", self.graph_opacity_spin)
+
         self.boot_chk = QtWidgets.QCheckBox("Launch at Startup")
         application_layout.addRow(self.boot_chk)
 
@@ -270,6 +284,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.opacity_spin.setValue(d["opacity"] * 100)
         self.hover_opacity_check.setChecked(d["reduce_opacity_on_hover"])
         self.click_through_check.setChecked(d["click_through_overlay"])
+        graph_style_index = self.graph_style_combo.findData(d["graph_style"])
+        self.graph_style_combo.setCurrentIndex(max(0, graph_style_index))
+        self.graph_opacity_spin.setValue(d["graph_opacity"] * 100)
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
         self.font_size_spin.setValue(d["font_size"])
         self.bold_check.setChecked(d["font_bold"])
@@ -351,8 +368,10 @@ class SettingsDialog(QtWidgets.QDialog):
                 spin.value(), self._threshold_unit
             )
         d["opacity"] = self.opacity_spin.value() / 100.0
+        d["graph_opacity"] = self.graph_opacity_spin.value() / 100.0
         d["reduce_opacity_on_hover"] = self.hover_opacity_check.isChecked()
         d["click_through_overlay"] = self.click_through_check.isChecked()
+        d["graph_style"] = self.graph_style_combo.currentData()
         d["font"] = self.font_combo.currentFont().family()
         d["font_size"] = self.font_size_spin.value()
         d["font_bold"] = self.bold_check.isChecked()

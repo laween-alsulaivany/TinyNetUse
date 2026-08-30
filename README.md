@@ -57,7 +57,7 @@ Your settings and window positions are saved automatically.
 
 ## Screenshots
 
-The graph displays recent download and upload activity using the same units as the overlay, with a current-value legend, a visible unit scale, and horizontal grid lines. Use its context menu to pause sampling temporarily or clear its history.
+The graph displays recent download and upload activity using the same units as the overlay, with a top-right current-value telemetry strip, a visible unit scale, and horizontal grid lines. Choose Centered, Stacked, or Shared Overlay in Settings to arrange the download and upload series. Use its context menu to pause sampling temporarily or clear its history.
 
 <p align="center">
   <img src="docs/screenshots/tinynetuse-graph.png"
@@ -65,7 +65,7 @@ The graph displays recent download and upload activity using the same units as t
        width="860">
 </p>
 
-The settings window groups Application, Widget, and Graph controls for monitoring, appearance, alerts, and startup behavior.
+The settings window groups Application, Widget, and Graph controls for monitoring, appearance, alerts, and startup behavior. Overlay and graph opacity are configured separately.
 
 <p align="center">
   <img src="docs/screenshots/tinynetuse-settings.png"

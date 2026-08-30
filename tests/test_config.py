@@ -190,6 +190,27 @@ def test_schema_seven_config_gains_the_default_auto_unit_minimum(tmp_path):
     assert config.data["auto_unit_minimum"] == "B/s"
 
 
+def test_schema_eight_config_gains_the_default_graph_style(tmp_path):
+    path = tmp_path / "config.json"
+    write_config(path, {"config_version": 8})
+
+    config = Config(path)
+
+    assert config.data["config_version"] == CONFIG_VERSION
+    assert config.data["graph_style"] == "centered"
+
+
+def test_schema_nine_config_inherits_overlay_opacity_for_the_graph(tmp_path):
+    path = tmp_path / "config.json"
+    write_config(path, {"config_version": 9, "opacity": 0.6})
+
+    config = Config(path)
+
+    assert config.data["config_version"] == CONFIG_VERSION
+    assert config.data["opacity"] == 0.6
+    assert config.data["graph_opacity"] == 0.6
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [
@@ -208,8 +229,11 @@ def test_schema_seven_config_gains_the_default_auto_unit_minimum(tmp_path):
         ("opacity", 0),
         ("opacity", 0.19),
         ("opacity", 1.1),
+        ("graph_opacity", 0.19),
+        ("graph_opacity", 1.1),
         ("unit", "GB/s"),
         ("auto_unit_minimum", "Kib/s"),
+        ("graph_style", "diagonal"),
         ("precision", 3),
         ("network_adapter", ""),
         ("network_adapter", 123),
