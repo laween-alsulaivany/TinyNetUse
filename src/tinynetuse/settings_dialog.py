@@ -51,14 +51,35 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.adapter_combo = QtWidgets.QComboBox()
         adapter_help = (
+            "<p style='white-space: normal; width: 320px;'>"
             "Auto monitors the active network connection. Select an adapter "
-            "manually if you want to monitor a specific Ethernet, Wi-Fi, VPN "
-            "or virtual interface."
+            "manually if you want to monitor a specific Ethernet, Wi-Fi, VPN, "
+            "or virtual interface.</p>"
         )
-        self.adapter_combo.setToolTip(adapter_help)
         adapter_label = QtWidgets.QLabel("Network Adapter:")
-        adapter_label.setToolTip(adapter_help)
-        layout.addRow(adapter_label, self.adapter_combo)
+        adapter_label.setBuddy(self.adapter_combo)
+        self.adapter_help_button = QtWidgets.QToolButton()
+        self.adapter_help_button.setIcon(
+            self.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_MessageBoxInformation
+            )
+        )
+        self.adapter_help_button.setAutoRaise(True)
+        self.adapter_help_button.setFixedSize(20, 20)
+        self.adapter_help_button.setToolTip(adapter_help)
+        self.adapter_help_button.setAccessibleName("Network Adapter Help")
+        self.adapter_help_button.setAccessibleDescription(
+            "Explains how to select a network adapter."
+        )
+        adapter_label_layout = QtWidgets.QHBoxLayout()
+        adapter_label_layout.setContentsMargins(0, 0, 0, 0)
+        adapter_label_layout.setSpacing(2)
+        adapter_label_layout.addWidget(adapter_label)
+        adapter_label_layout.addWidget(self.adapter_help_button)
+        adapter_label_layout.addStretch()
+        adapter_label_widget = QtWidgets.QWidget()
+        adapter_label_widget.setLayout(adapter_label_layout)
+        layout.addRow(adapter_label_widget, self.adapter_combo)
         self._refresh_adapter_list()
 
         self.interval = QtWidgets.QDoubleSpinBox()

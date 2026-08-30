@@ -314,6 +314,23 @@ def test_adapter_list_is_refreshed_and_uses_stable_names(
     parent.sampler.available_adapters.assert_called_once()
 
 
+def test_adapter_help_uses_a_compact_accessible_info_button(
+    tmp_path, qtbot, monkeypatch
+):
+    dialog, _, _ = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    help_button = dialog.adapter_help_button
+
+    assert isinstance(help_button, QtWidgets.QToolButton)
+    assert help_button.autoRaise()
+    assert help_button.accessibleName() == "Network Adapter Help"
+    assert help_button.accessibleDescription() == (
+        "Explains how to select a network adapter."
+    )
+    assert "width: 320px" in help_button.toolTip()
+    assert dialog.adapter_combo.toolTip() == ""
+
+
 def test_adapter_change_then_cancel_does_not_change_config(
     tmp_path, qtbot, monkeypatch
 ):
