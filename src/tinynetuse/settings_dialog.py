@@ -20,6 +20,7 @@ RESET_KEYS = (
     "update_interval",
     "opacity",
     "reduce_opacity_on_hover",
+    "click_through_overlay",
     "alert_color",
     "download_color",
     "upload_color",
@@ -140,6 +141,35 @@ class SettingsDialog(QtWidgets.QDialog):
         hover_opacity_widget.setLayout(hover_opacity_layout)
         layout.addRow(hover_opacity_widget)
 
+        self.click_through_check = QtWidgets.QCheckBox("Click through overlay")
+        self.click_through_help_button = QtWidgets.QToolButton()
+        self.click_through_help_button.setIcon(
+            self.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_MessageBoxInformation
+            )
+        )
+        self.click_through_help_button.setAutoRaise(True)
+        self.click_through_help_button.setFixedSize(20, 20)
+        self.click_through_help_button.setToolTip(
+            "<p style='white-space: normal; width: 320px;'>"
+            "When enabled, pointer input passes through the overlay to the "
+            "window beneath it. It cannot be used with Reduce opacity on "
+            "hover because the overlay cannot detect the pointer.</p>"
+        )
+        self.click_through_help_button.setAccessibleName("Click Through Help")
+        self.click_through_help_button.setAccessibleDescription(
+            "Explains how click-through changes overlay pointer input."
+        )
+        click_through_layout = QtWidgets.QHBoxLayout()
+        click_through_layout.setContentsMargins(0, 0, 0, 0)
+        click_through_layout.setSpacing(2)
+        click_through_layout.addWidget(self.click_through_check)
+        click_through_layout.addWidget(self.click_through_help_button)
+        click_through_layout.addStretch()
+        click_through_widget = QtWidgets.QWidget()
+        click_through_widget.setLayout(click_through_layout)
+        layout.addRow(click_through_widget)
+
         self.font_combo = QtWidgets.QFontComboBox()
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
         layout.addRow("Font:", self.font_combo)
@@ -190,6 +220,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.buttons.rejected.connect(self.reject)
         layout.addRow(self.buttons)
 
+        self.hover_opacity_check.toggled.connect(self._on_hover_opacity_toggled)
+        self.click_through_check.toggled.connect(self._on_click_through_toggled)
+
     def _color_buttons(self):
         return {
             "alert_color": self.btn_alert,
@@ -215,6 +248,7 @@ class SettingsDialog(QtWidgets.QDialog):
             )
         self.opacity_spin.setValue(d["opacity"] * 100)
         self.hover_opacity_check.setChecked(d["reduce_opacity_on_hover"])
+        self.click_through_check.setChecked(d["click_through_overlay"])
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
         self.font_size_spin.setValue(d["font_size"])
         self.bold_check.setChecked(d["font_bold"])
@@ -248,6 +282,28 @@ class SettingsDialog(QtWidgets.QDialog):
                 threshold_to_display(thresholds[direction], new_unit) or 0.0
             )
 
+    def _on_hover_opacity_toggled(self, enabled):
+        if enabled and self.click_through_check.isChecked():
+            QtWidgets.QMessageBox.information(
+                self,
+                "Incompatible Overlay Options",
+                "Reduce opacity on hover has disabled Click Through Overlay. "
+                "Both options cannot be enabled because a click-through "
+                "overlay cannot detect the pointer.",
+            )
+            self.click_through_check.setChecked(False)
+
+    def _on_click_through_toggled(self, enabled):
+        if enabled and self.hover_opacity_check.isChecked():
+            QtWidgets.QMessageBox.information(
+                self,
+                "Incompatible Overlay Options",
+                "Click Through Overlay has disabled Reduce opacity on hover. "
+                "Both options cannot be enabled because a click-through "
+                "overlay cannot detect the pointer.",
+            )
+            self.hover_opacity_check.setChecked(False)
+
     def _update_threshold_display(self, unit):
         label = unit if unit != "auto" else THRESHOLD_UNIT
         max_value = threshold_to_display(1000, unit)
@@ -269,6 +325,7 @@ class SettingsDialog(QtWidgets.QDialog):
             )
         d["opacity"] = self.opacity_spin.value() / 100.0
         d["reduce_opacity_on_hover"] = self.hover_opacity_check.isChecked()
+        d["click_through_overlay"] = self.click_through_check.isChecked()
         d["font"] = self.font_combo.currentFont().family()
         d["font_size"] = self.font_size_spin.value()
         d["font_bold"] = self.bold_check.isChecked()

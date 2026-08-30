@@ -310,6 +310,33 @@ def test_hover_opacity_setting_and_help_are_accessible(
     assert "25% opacity" in dialog.hover_opacity_help_button.toolTip()
 
 
+def test_enabling_second_overlay_option_disables_the_first_with_notice(
+    tmp_path, qtbot, monkeypatch
+):
+    dialog, _, config = make_dialog(tmp_path, qtbot, monkeypatch)
+    information = Mock()
+    monkeypatch.setattr(QtWidgets.QMessageBox, "information", information)
+
+    dialog.click_through_check.setChecked(True)
+
+    assert information.call_count == 0
+    assert dialog.click_through_check.isChecked()
+
+    dialog.hover_opacity_check.setChecked(True)
+
+    assert information.call_count == 1
+    assert dialog.hover_opacity_check.isChecked()
+    assert not dialog.click_through_check.isChecked()
+    assert "Both options cannot be enabled" in information.call_args.args[2]
+
+    dialog.accept()
+
+    assert config.data["reduce_opacity_on_hover"] is True
+    assert config.data["click_through_overlay"] is False
+    assert isinstance(dialog.click_through_help_button, QtWidgets.QToolButton)
+    assert dialog.click_through_help_button.accessibleName() == "Click Through Help"
+
+
 def test_adapter_list_is_refreshed_and_uses_stable_names(
     tmp_path, qtbot, monkeypatch
 ):

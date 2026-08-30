@@ -156,6 +156,23 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         self.config.data["widget_locked"] = lock
         self.config.save()
 
+    def toggle_click_through(self, enabled: bool):
+        if enabled and self.reduce_opacity_on_hover:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Incompatible Overlay Options",
+                "Click Through Overlay has disabled Reduce opacity on hover. "
+                "Both options cannot be enabled because a click-through "
+                "overlay cannot detect the pointer.",
+            )
+            self.reduce_opacity_on_hover = False
+            self.config.data["reduce_opacity_on_hover"] = False
+            self._update_window_opacity()
+        self.click_through_overlay = enabled
+        self._update_click_through()
+        self.config.data["click_through_overlay"] = enabled
+        self.config.save()
+
     def open_settings(self):
         SettingsDialog(self).exec()
 
@@ -196,6 +213,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         )
         self.opacity = d["opacity"]
         self.reduce_opacity_on_hover = d["reduce_opacity_on_hover"]
+        self.click_through_overlay = d["click_through_overlay"]
 
         # Font settings
         self.font = d.get("font", "Segoe UI")
@@ -213,6 +231,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             lbl.setFont(label_font)
 
         self._update_window_opacity()
+        self._update_click_through()
 
         # Update graph window settings
         if self.graph_window:
@@ -330,6 +349,17 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             opacity = min(opacity, HOVER_OPACITY)
         self.setWindowOpacity(opacity)
 
+    def _update_click_through(self):
+        current = bool(self.windowFlags() & Qt.WindowTransparentForInput)
+        if current != self.click_through_overlay:
+            visible = self.isVisible()
+            self.setWindowFlag(
+                Qt.WindowTransparentForInput, self.click_through_overlay
+            )
+            if visible:
+                self.show()
+        self.setCursor(Qt.ArrowCursor)
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
             grip = 16
@@ -426,6 +456,11 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         lock.setCheckable(True)
         lock.setChecked(self.locked)
         lock.triggered.connect(self.toggle_lock)
+
+        click_through = menu.addAction("Click Through Overlay")
+        click_through.setCheckable(True)
+        click_through.setChecked(self.click_through_overlay)
+        click_through.triggered.connect(self.toggle_click_through)
 
         menu.addAction("Settings", self.open_settings)
         menu.addAction("Reset Window Positions", self.reset_window_positions)

@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt
 
 import tinynetuse.app as app_module
 from tinynetuse.app import TinyNetUseWidget
@@ -11,7 +13,7 @@ from tinynetuse.config import Config
 class StubSampler:
     def __init__(self, samples):
         self.selected_adapter = "Ethernet"
-        self.resolved_adapter = None
+        self.resolved_adapter: str | None = None
         self.source_revision = 0
         self._samples = iter(samples)
 
@@ -49,10 +51,12 @@ def menu_owner(visible=True):
         graph_visible=True,
         always_on_top=False,
         locked=True,
+        click_through_overlay=False,
         toggle_overlay_visibility=Mock(),
         toggle_graph=Mock(),
         toggle_always_on_top=Mock(),
         toggle_lock=Mock(),
+        toggle_click_through=Mock(),
         open_settings=Mock(),
         reset_window_positions=Mock(),
         open_about=Mock(),
@@ -78,6 +82,7 @@ def test_main_menu_is_short_and_logically_ordered(qtbot):
         "Show Graph",
         "Always On Top",
         "Lock Position",
+        "Click Through Overlay",
         "Settings",
         "Reset Window Positions",
         "About TinyNetUse",
@@ -87,6 +92,7 @@ def test_main_menu_is_short_and_logically_ordered(qtbot):
     assert menu.actions()[1].isChecked()
     assert not menu.actions()[2].isChecked()
     assert menu.actions()[3].isChecked()
+    assert not menu.actions()[4].isChecked()
 
 
 def test_menu_offers_show_when_overlay_is_hidden(qtbot):
@@ -114,6 +120,73 @@ def test_overlay_visibility_toggle_changes_a_real_widget(
     assert not widget.isVisible()
 
     widget.toggle_overlay_visibility()
+    assert widget.isVisible()
+
+
+def test_click_through_overlay_persists_and_allows_input_again(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+
+    widget.toggle_click_through(True)
+
+    assert widget.config.data["click_through_overlay"] is True
+    assert widget.click_through_overlay is True
+    assert widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    widget.toggle_click_through(False)
+
+    assert widget.config.data["click_through_overlay"] is False
+    assert widget.click_through_overlay is False
+    assert not widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
+
+
+def test_click_through_disables_hover_opacity_with_notice(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.config.data["reduce_opacity_on_hover"] = True
+    widget.apply_settings()
+    information = Mock()
+    monkeypatch.setattr(
+        app_module.QtWidgets.QMessageBox, "information", information
+    )
+
+    widget.toggle_click_through(True)
+
+    assert information.call_count == 1
+    assert widget.config.data["reduce_opacity_on_hover"] is False
+    assert widget.config.data["click_through_overlay"] is True
+    assert widget.reduce_opacity_on_hover is False
+
+
+def test_applying_settings_keeps_a_visible_overlay_visible(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+
+    widget.apply_settings()
+
     assert widget.isVisible()
 
 
@@ -269,8 +342,16 @@ def test_overlay_reduces_opacity_on_hover_when_enabled(
     widget.config.data["reduce_opacity_on_hover"] = True
     widget.apply_settings()
 
-    widget.enterEvent(QtCore.QEvent(QtCore.QEvent.Type.Enter))
-    assert widget.windowOpacity() == app_module.HOVER_OPACITY
+    widget.enterEvent(
+        QtGui.QEnterEvent(
+            QtCore.QPointF(), QtCore.QPointF(), QtCore.QPointF()
+        )
+    )
+    assert widget.windowOpacity() == pytest.approx(
+        app_module.HOVER_OPACITY, abs=1 / 255
+    )
 
     widget.leaveEvent(QtCore.QEvent(QtCore.QEvent.Type.Leave))
-    assert widget.windowOpacity() == widget.config.data["opacity"]
+    assert widget.windowOpacity() == pytest.approx(
+        widget.config.data["opacity"], abs=1 / 255
+    )

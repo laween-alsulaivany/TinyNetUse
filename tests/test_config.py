@@ -134,6 +134,52 @@ def test_hover_opacity_preference_is_saved_and_loaded(tmp_path):
     assert loaded.data["reduce_opacity_on_hover"] is True
 
 
+def test_click_through_preference_is_saved_and_loaded(tmp_path):
+    path = tmp_path / "config.json"
+    config = Config(path)
+    config.data["click_through_overlay"] = True
+    config.save()
+
+    loaded = Config(path)
+
+    assert loaded.data["click_through_overlay"] is True
+
+
+def test_schema_five_config_gains_disabled_click_through(tmp_path):
+    path = tmp_path / "config.json"
+    write_config(
+        path,
+        {
+            "config_version": 5,
+            "reduce_opacity_on_hover": True,
+        },
+    )
+
+    config = Config(path)
+
+    assert config.data["config_version"] == CONFIG_VERSION
+    assert config.data["reduce_opacity_on_hover"] is True
+    assert config.data["click_through_overlay"] is False
+
+
+def test_click_through_takes_precedence_over_hover_opacity(tmp_path):
+    path = tmp_path / "config.json"
+    write_config(
+        path,
+        {
+            "config_version": 6,
+            "click_through_overlay": True,
+            "reduce_opacity_on_hover": True,
+        },
+    )
+
+    config = Config(path)
+
+    assert config.data["config_version"] == CONFIG_VERSION
+    assert config.data["click_through_overlay"] is True
+    assert config.data["reduce_opacity_on_hover"] is False
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [

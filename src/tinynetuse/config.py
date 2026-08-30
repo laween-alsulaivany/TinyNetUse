@@ -15,7 +15,7 @@ from tinynetuse.units import SUPPORTED_UNITS
 
 APP_NAME = "TinyNetUse"
 CONFIG_FILENAME = "config.json"
-CONFIG_VERSION = 5
+CONFIG_VERSION = 7
 PORTABLE_MARKER = "portable.flag"
 
 DEFAULTS = {
@@ -27,6 +27,7 @@ DEFAULTS = {
     "widget_geometry": None,
     "widget_locked": False,
     "widget_always_on_top": True,
+    "click_through_overlay": False,
     "graph_visible": False,
     "graph_geometry": None,
     "graph_locked": False,
@@ -48,6 +49,7 @@ BOOL_KEYS = (
     "font_bold",
     "widget_locked",
     "widget_always_on_top",
+    "click_through_overlay",
     "graph_visible",
     "graph_locked",
     "graph_always_on_top",
@@ -131,6 +133,9 @@ def validate_config(data) -> dict:
     for key in BOOL_KEYS:
         if isinstance(data.get(key), bool):
             clean[key] = data[key]
+
+    if clean["click_through_overlay"]:
+        clean["reduce_opacity_on_hover"] = False
 
     for key in GEOMETRY_KEYS:
         value = data.get(key)
