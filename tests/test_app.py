@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 import tinynetuse.app as app_module
 from tinynetuse.app import TinyNetUseWidget
@@ -255,3 +255,22 @@ def test_overlay_font_change_expands_and_saves_minimum_geometry(
         widget.width(),
         widget.height(),
     ]
+
+
+def test_overlay_reduces_opacity_on_hover_when_enabled(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.config.data["reduce_opacity_on_hover"] = True
+    widget.apply_settings()
+
+    widget.enterEvent(QtCore.QEvent(QtCore.QEvent.Type.Enter))
+    assert widget.windowOpacity() == app_module.HOVER_OPACITY
+
+    widget.leaveEvent(QtCore.QEvent(QtCore.QEvent.Type.Leave))
+    assert widget.windowOpacity() == widget.config.data["opacity"]

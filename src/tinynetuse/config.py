@@ -15,7 +15,7 @@ from tinynetuse.units import SUPPORTED_UNITS
 
 APP_NAME = "TinyNetUse"
 CONFIG_FILENAME = "config.json"
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 PORTABLE_MARKER = "portable.flag"
 
 DEFAULTS = {
@@ -34,6 +34,7 @@ DEFAULTS = {
     "graph_history": 60,
     "update_interval": 1.0,
     "opacity": 0.8,
+    "reduce_opacity_on_hover": False,
     "alert_color": "#FF5555",
     "download_color": "#4FC3F7",
     "upload_color": "#FF8A65",
@@ -50,6 +51,7 @@ BOOL_KEYS = (
     "graph_visible",
     "graph_locked",
     "graph_always_on_top",
+    "reduce_opacity_on_hover",
 )
 COLOR_KEYS = ("font_color", "alert_color", "download_color", "upload_color")
 GEOMETRY_KEYS = ("widget_geometry", "graph_geometry")

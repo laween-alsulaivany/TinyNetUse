@@ -20,6 +20,7 @@ from tinynetuse.version import __version__
 
 OVERLAY_DEFAULT_SIZE = QtCore.QSize(140, 60)
 OVERLAY_MINIMUM_SIZE = QtCore.QSize(100, 40)
+HOVER_OPACITY = 0.25
 
 
 def _asset_path(relative: str) -> str:
@@ -92,6 +93,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
 
         # ── Drag support ──
         self._drag_offset = None
+        self._pointer_over_overlay = False
 
         # ── Resizing support ──
         self._resizing = False
@@ -193,6 +195,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             d["notify_threshold"].get("upload")
         )
         self.opacity = d["opacity"]
+        self.reduce_opacity_on_hover = d["reduce_opacity_on_hover"]
 
         # Font settings
         self.font = d.get("font", "Segoe UI")
@@ -209,8 +212,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         for lbl in (self.dl_label, self.ul_label):
             lbl.setFont(label_font)
 
-        # Opacity
-        self.setWindowOpacity(d.get("opacity", 1.0))
+        self._update_window_opacity()
 
         # Update graph window settings
         if self.graph_window:
@@ -311,6 +313,22 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         size = 16
         for i in range(4, size, 4):
             p.drawLine(self.width() - i, self.height(), self.width(), self.height() - i)
+
+    def enterEvent(self, event):
+        self._pointer_over_overlay = True
+        self._update_window_opacity()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._pointer_over_overlay = False
+        self._update_window_opacity()
+        super().leaveEvent(event)
+
+    def _update_window_opacity(self):
+        opacity = self.opacity
+        if self.reduce_opacity_on_hover and self._pointer_over_overlay:
+            opacity = min(opacity, HOVER_OPACITY)
+        self.setWindowOpacity(opacity)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:

@@ -56,6 +56,7 @@ def test_normal_save_and_load(tmp_path):
     assert loaded.data["unit"] == "Mib/s"
     assert loaded.data["precision"] == 2
     assert loaded.data["network_adapter"] == "My VPN"
+    assert loaded.data["reduce_opacity_on_hover"] is False
     assert loaded.data["notify_threshold"]["download"] == 10
     assert loaded.data["notify_threshold"]["upload"] == 5
 
@@ -120,6 +121,17 @@ def test_migration_adds_the_upload_threshold(tmp_path):
         "download": 10,
         "upload": None,
     }
+
+
+def test_hover_opacity_preference_is_saved_and_loaded(tmp_path):
+    path = tmp_path / "config.json"
+    config = Config(path)
+    config.data["reduce_opacity_on_hover"] = True
+    config.save()
+
+    loaded = Config(path)
+
+    assert loaded.data["reduce_opacity_on_hover"] is True
 
 
 @pytest.mark.parametrize(

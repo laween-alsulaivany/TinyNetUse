@@ -19,6 +19,7 @@ RESET_KEYS = (
     "font_bold",
     "update_interval",
     "opacity",
+    "reduce_opacity_on_hover",
     "alert_color",
     "download_color",
     "upload_color",
@@ -110,6 +111,35 @@ class SettingsDialog(QtWidgets.QDialog):
         self.opacity_spin.setSuffix(" %")
         layout.addRow("Opacity:", self.opacity_spin)
 
+        self.hover_opacity_check = QtWidgets.QCheckBox("Reduce opacity on hover")
+        self.hover_opacity_help_button = QtWidgets.QToolButton()
+        self.hover_opacity_help_button.setIcon(
+            self.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_MessageBoxInformation
+            )
+        )
+        self.hover_opacity_help_button.setAutoRaise(True)
+        self.hover_opacity_help_button.setFixedSize(20, 20)
+        self.hover_opacity_help_button.setToolTip(
+            "<p style='white-space: normal; width: 320px;'>"
+            "When enabled, the overlay uses 25% opacity while the pointer is "
+            "over it. It returns to the configured opacity when the pointer "
+            "leaves.</p>"
+        )
+        self.hover_opacity_help_button.setAccessibleName("Hover Opacity Help")
+        self.hover_opacity_help_button.setAccessibleDescription(
+            "Explains the overlay opacity change while the pointer is over it."
+        )
+        hover_opacity_layout = QtWidgets.QHBoxLayout()
+        hover_opacity_layout.setContentsMargins(0, 0, 0, 0)
+        hover_opacity_layout.setSpacing(2)
+        hover_opacity_layout.addWidget(self.hover_opacity_check)
+        hover_opacity_layout.addWidget(self.hover_opacity_help_button)
+        hover_opacity_layout.addStretch()
+        hover_opacity_widget = QtWidgets.QWidget()
+        hover_opacity_widget.setLayout(hover_opacity_layout)
+        layout.addRow(hover_opacity_widget)
+
         self.font_combo = QtWidgets.QFontComboBox()
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
         layout.addRow("Font:", self.font_combo)
@@ -184,6 +214,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 or 0.0
             )
         self.opacity_spin.setValue(d["opacity"] * 100)
+        self.hover_opacity_check.setChecked(d["reduce_opacity_on_hover"])
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
         self.font_size_spin.setValue(d["font_size"])
         self.bold_check.setChecked(d["font_bold"])
@@ -237,6 +268,7 @@ class SettingsDialog(QtWidgets.QDialog):
                 spin.value(), self._threshold_unit
             )
         d["opacity"] = self.opacity_spin.value() / 100.0
+        d["reduce_opacity_on_hover"] = self.hover_opacity_check.isChecked()
         d["font"] = self.font_combo.currentFont().family()
         d["font_size"] = self.font_size_spin.value()
         d["font_bold"] = self.bold_check.isChecked()

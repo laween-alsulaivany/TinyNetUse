@@ -296,6 +296,20 @@ def test_opacity_control_enforces_safe_range(tmp_path, qtbot, monkeypatch):
     assert dialog.opacity_spin.value() == 100
 
 
+def test_hover_opacity_setting_and_help_are_accessible(
+    tmp_path, qtbot, monkeypatch
+):
+    dialog, _, config = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    dialog.hover_opacity_check.setChecked(True)
+    dialog.accept()
+
+    assert config.data["reduce_opacity_on_hover"] is True
+    assert isinstance(dialog.hover_opacity_help_button, QtWidgets.QToolButton)
+    assert dialog.hover_opacity_help_button.accessibleName() == "Hover Opacity Help"
+    assert "25% opacity" in dialog.hover_opacity_help_button.toolTip()
+
+
 def test_adapter_list_is_refreshed_and_uses_stable_names(
     tmp_path, qtbot, monkeypatch
 ):
