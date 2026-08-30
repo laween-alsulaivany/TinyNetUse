@@ -11,6 +11,7 @@ from tinynetuse.config import Config
 class StubSampler:
     def __init__(self, samples):
         self.selected_adapter = "Ethernet"
+        self.resolved_adapter = None
         self.source_revision = 0
         self._samples = iter(samples)
 
@@ -168,6 +169,40 @@ def test_overlay_updates_labels_graph_and_alert_rendering(
     assert widget.grab().toImage().pixelColor(120, 100) == QtGui.QColor(
         "#123456"
     )
+
+
+def test_tray_tooltip_shows_the_auto_resolved_adapter(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, sampler = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.tray = Mock()
+    sampler.resolved_adapter = "Wi-Fi"
+
+    widget._update_tray_tooltip()
+
+    widget.tray.setToolTip.assert_called_once_with("TinyNetUse - Auto: Wi-Fi")
+
+
+def test_tray_tooltip_stays_default_for_manual_adapter(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, sampler = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.tray = Mock()
+    sampler.resolved_adapter = None
+
+    widget._update_tray_tooltip()
+
+    widget.tray.setToolTip.assert_called_once_with("TinyNetUse")
 
 
 def test_overlay_font_settings_do_not_change_the_application_font(

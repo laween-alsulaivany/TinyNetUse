@@ -262,6 +262,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         sent_per_sec, recv_per_sec = self.sampler.sample()
         source_changed = self.sampler.source_revision != previous_source
 
+        self._update_tray_tooltip()
+
         if self.config.data.get("network_adapter") != self.sampler.selected_adapter:
             self.config.data["network_adapter"] = self.sampler.selected_adapter
             self.config.save()
@@ -369,13 +371,19 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 QtCore.QSize(_s, _s),
             )
         self.tray = QtWidgets.QSystemTrayIcon(tray_icon, self)
-        self.tray.setToolTip("TinyNetUse")
+        self._update_tray_tooltip()
         self._tray_menu = QtWidgets.QMenu()
         # Rebuild the menu on open so checked states are always current.
         self._tray_menu.aboutToShow.connect(self._build_tray_menu)
         self.tray.setContextMenu(self._tray_menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    def _update_tray_tooltip(self):
+        adapter = self.sampler.resolved_adapter
+        tooltip = f"TinyNetUse - Auto: {adapter}" if adapter else "TinyNetUse"
+        if hasattr(self, "tray"):
+            self.tray.setToolTip(tooltip)
 
     def _build_tray_menu(self):
         self._tray_menu.clear()

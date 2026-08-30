@@ -217,6 +217,12 @@ class NetworkSampler:
             self.download_rate = recv_delta / elapsed
         return self.upload_rate, self.download_rate
 
+    @property
+    def resolved_adapter(self):
+        if self.selected_adapter == AUTO_ADAPTER and len(self.active_adapters) == 1:
+            return self.active_adapters[0]
+        return None
+
     def _normalize_selection(self, adapter, available):
         # preserve the canonical available spelling for case-insensitive matches
         if not isinstance(adapter, str) or adapter == AUTO_ADAPTER:

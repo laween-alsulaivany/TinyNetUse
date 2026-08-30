@@ -194,6 +194,7 @@ def test_sampler_calculates_selected_adapter_rates():
         [10.0, 12.0],
     )
 
+    assert sampler.resolved_adapter is None
     assert sampler.sample() == pytest.approx((100, 300))
 
 
@@ -247,6 +248,7 @@ def test_auto_uses_adapter_selected_by_windows_route():
     )
 
     assert sampler.active_adapters == ("Ethernet",)
+    assert sampler.resolved_adapter == "Ethernet"
     assert sampler.sample() == pytest.approx((100, 200))
 
 
@@ -277,6 +279,7 @@ def test_auto_fallback_aggregates_active_adapters():
     )
 
     assert sampler.active_adapters == ("Ethernet", "VPN")
+    assert sampler.resolved_adapter is None
     assert sampler.sample() == pytest.approx((300, 500))
 
 
