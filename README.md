@@ -65,7 +65,7 @@ The graph displays recent download and upload activity using the same units as t
        width="860">
 </p>
 
-The settings window controls the overlay, graph, units, appearance, alerts, and startup behavior.
+The settings window groups Application, Widget, and Graph controls for monitoring, appearance, alerts, and startup behavior.
 
 <p align="center">
   <img src="docs/screenshots/tinynetuse-settings.png"

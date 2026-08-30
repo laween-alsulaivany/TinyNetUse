@@ -49,7 +49,16 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _build_ui(self):
         self.setModal(True)
-        layout = QtWidgets.QFormLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
+        self.application_group = QtWidgets.QGroupBox("Application")
+        application_layout = QtWidgets.QFormLayout(self.application_group)
+        self.widget_group = QtWidgets.QGroupBox("Widget")
+        widget_layout = QtWidgets.QFormLayout(self.widget_group)
+        self.graph_group = QtWidgets.QGroupBox("Graph")
+        graph_layout = QtWidgets.QFormLayout(self.graph_group)
+        layout.addWidget(self.application_group)
+        layout.addWidget(self.widget_group)
+        layout.addWidget(self.graph_group)
         d = self.working
 
         self.adapter_combo = QtWidgets.QComboBox()
@@ -82,27 +91,27 @@ class SettingsDialog(QtWidgets.QDialog):
         adapter_label_layout.addStretch()
         adapter_label_widget = QtWidgets.QWidget()
         adapter_label_widget.setLayout(adapter_label_layout)
-        layout.addRow(adapter_label_widget, self.adapter_combo)
+        application_layout.addRow(adapter_label_widget, self.adapter_combo)
         self._refresh_adapter_list()
 
         self.interval = QtWidgets.QDoubleSpinBox()
         self.interval.setRange(0.1, 60.0)
         self.interval.setSingleStep(0.1)
-        layout.addRow("Update Interval (s):", self.interval)
+        application_layout.addRow("Update Interval (s):", self.interval)
 
         self.unit_combo = QtWidgets.QComboBox()
         self.unit_combo.addItems(SUPPORTED_UNITS)
-        layout.addRow("Speed Unit:", self.unit_combo)
+        application_layout.addRow("Speed Unit:", self.unit_combo)
 
         self.auto_minimum_label = QtWidgets.QLabel("Minimum Auto Unit:")
         self.auto_minimum_combo = QtWidgets.QComboBox()
         self.auto_minimum_combo.addItems(AUTO_UNITS)
         self.auto_minimum_label.setBuddy(self.auto_minimum_combo)
-        layout.addRow(self.auto_minimum_label, self.auto_minimum_combo)
+        application_layout.addRow(self.auto_minimum_label, self.auto_minimum_combo)
 
         self.prec_spin = QtWidgets.QSpinBox()
         self.prec_spin.setRange(0, 2)
-        layout.addRow("Decimal Precision:", self.prec_spin)
+        application_layout.addRow("Decimal Precision:", self.prec_spin)
 
         self.download_threshold_spin = QtWidgets.QDoubleSpinBox()
         self.upload_threshold_spin = QtWidgets.QDoubleSpinBox()
@@ -110,14 +119,14 @@ class SettingsDialog(QtWidgets.QDialog):
             "download": self.download_threshold_spin,
             "upload": self.upload_threshold_spin,
         }
-        layout.addRow("Highlight when download exceeds:", self.download_threshold_spin)
-        layout.addRow("Highlight when upload exceeds:", self.upload_threshold_spin)
+        widget_layout.addRow("Highlight when download exceeds:", self.download_threshold_spin)
+        widget_layout.addRow("Highlight when upload exceeds:", self.upload_threshold_spin)
 
         self.opacity_spin = QtWidgets.QDoubleSpinBox()
         self.opacity_spin.setRange(20, 100)
         self.opacity_spin.setSingleStep(10)
         self.opacity_spin.setSuffix(" %")
-        layout.addRow("Opacity:", self.opacity_spin)
+        widget_layout.addRow("Opacity:", self.opacity_spin)
 
         self.hover_opacity_check = QtWidgets.QCheckBox("Reduce opacity on hover")
         self.hover_opacity_help_button = QtWidgets.QToolButton()
@@ -146,7 +155,7 @@ class SettingsDialog(QtWidgets.QDialog):
         hover_opacity_layout.addStretch()
         hover_opacity_widget = QtWidgets.QWidget()
         hover_opacity_widget.setLayout(hover_opacity_layout)
-        layout.addRow(hover_opacity_widget)
+        widget_layout.addRow(hover_opacity_widget)
 
         self.click_through_check = QtWidgets.QCheckBox("Click through overlay")
         self.click_through_help_button = QtWidgets.QToolButton()
@@ -175,39 +184,39 @@ class SettingsDialog(QtWidgets.QDialog):
         click_through_layout.addStretch()
         click_through_widget = QtWidgets.QWidget()
         click_through_widget.setLayout(click_through_layout)
-        layout.addRow(click_through_widget)
+        widget_layout.addRow(click_through_widget)
 
         self.font_combo = QtWidgets.QFontComboBox()
         self.font_combo.setCurrentFont(QtGui.QFont(d["font"]))
-        layout.addRow("Font:", self.font_combo)
+        widget_layout.addRow("Font:", self.font_combo)
 
         self.font_size_spin = QtWidgets.QSpinBox()
         self.font_size_spin.setRange(6, 72)
-        layout.addRow("Font Size:", self.font_size_spin)
+        widget_layout.addRow("Font Size:", self.font_size_spin)
 
         self.btn_font = QtWidgets.QPushButton()
         self.btn_font.clicked.connect(lambda: self._pick("font_color", self.btn_font))
-        layout.addRow("Font Color:", self.btn_font)
+        widget_layout.addRow("Font Color:", self.btn_font)
 
         self.bold_check = QtWidgets.QCheckBox("Bold Text")
-        layout.addWidget(self.bold_check)
+        widget_layout.addRow(self.bold_check)
 
         self.btn_alert = QtWidgets.QPushButton()
         self.btn_alert.clicked.connect(
             lambda: self._pick("alert_color", self.btn_alert)
         )
-        layout.addRow("Highlight Color:", self.btn_alert)
+        widget_layout.addRow("Highlight Color:", self.btn_alert)
 
         self.btn_dl = QtWidgets.QPushButton()
         self.btn_dl.clicked.connect(lambda: self._pick("download_color", self.btn_dl))
-        layout.addRow("Download Color:", self.btn_dl)
+        graph_layout.addRow("Download Color:", self.btn_dl)
 
         self.btn_ul = QtWidgets.QPushButton()
         self.btn_ul.clicked.connect(lambda: self._pick("upload_color", self.btn_ul))
-        layout.addRow("Upload Color:", self.btn_ul)
+        graph_layout.addRow("Upload Color:", self.btn_ul)
 
         self.boot_chk = QtWidgets.QCheckBox("Launch at Startup")
-        layout.addRow(self.boot_chk)
+        application_layout.addRow(self.boot_chk)
 
         # set the initial threshold unit for the display
         self._threshold_unit = THRESHOLD_UNIT
@@ -228,7 +237,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.reset_button.clicked.connect(self._reset_settings)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
-        layout.addRow(self.buttons)
+        layout.addWidget(self.buttons)
 
         self.hover_opacity_check.toggled.connect(self._on_hover_opacity_toggled)
         self.click_through_check.toggled.connect(self._on_click_through_toggled)

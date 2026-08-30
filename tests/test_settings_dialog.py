@@ -307,6 +307,25 @@ def test_auto_unit_minimum_is_available_only_in_auto_mode(
     assert config.data["auto_unit_minimum"] == "KB/s"
 
 
+def test_settings_controls_are_grouped_by_scope(tmp_path, qtbot, monkeypatch):
+    dialog, _, _ = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    assert [
+        group.title()
+        for group in (
+            dialog.application_group,
+            dialog.widget_group,
+            dialog.graph_group,
+        )
+    ] == ["Application", "Widget", "Graph"]
+    assert dialog.application_group.layout().indexOf(dialog.adapter_combo) >= 0
+    assert dialog.application_group.layout().indexOf(dialog.boot_chk) >= 0
+    assert dialog.widget_group.layout().indexOf(dialog.font_combo) >= 0
+    assert dialog.widget_group.layout().indexOf(dialog.opacity_spin) >= 0
+    assert dialog.graph_group.layout().indexOf(dialog.btn_dl) >= 0
+    assert dialog.graph_group.layout().indexOf(dialog.btn_ul) >= 0
+
+
 def test_opacity_control_enforces_safe_range(tmp_path, qtbot, monkeypatch):
     dialog, _, _ = make_dialog(tmp_path, qtbot, monkeypatch)
 
