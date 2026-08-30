@@ -24,3 +24,26 @@ def test_uninstaller_offers_to_remove_settings_but_silent_mode_keeps_them():
     assert "RemoveUserData := False" in INSTALLER
     assert "(CurUninstallStep = usPostUninstall) and RemoveUserData" in INSTALLER
     assert "DelTree(ExpandConstant('{localappdata}\\{#AppName}')" in INSTALLER
+
+
+def test_installer_identifies_update_reinstall_and_downgrade_operations():
+    assert "DisableWelcomePage=no" in INSTALLER
+    assert "CurrentUninstallKey" in INSTALLER
+    assert "RegQueryStringValue(HKCU64, CurrentUninstallKey" in INSTALLER
+    assert "RegQueryStringValue(HKLM64, LegacyUninstallKey" in INSTALLER
+    assert "'DisplayVersion', InstalledVersion" in INSTALLER
+    assert "PackVersionComponents(Major, Minor, Revision, 0)" in INSTALLER
+    assert "ComparePackedVersion(InstalledPackedVersion, CurrentPackedVersion)" in INSTALLER
+    assert "This setup will update it to version {#AppVersion}." in INSTALLER
+    assert "This setup will reinstall or repair it." in INSTALLER
+    assert "This setup will downgrade it to version {#AppVersion}." in INSTALLER
+    assert "WizardForm.WelcomeLabel2.Caption" in INSTALLER
+
+
+def test_installer_version_messaging_does_not_prompt_in_silent_mode():
+    wizard_code = INSTALLER.split("procedure InitializeWizard;", 1)[1].split(
+        "function PrepareToInstall", 1
+    )[0]
+
+    assert "MsgBox" not in wizard_code
+    assert "SuppressibleMsgBox" not in wizard_code

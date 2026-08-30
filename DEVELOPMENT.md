@@ -173,6 +173,12 @@ $version = & .\.venv\Scripts\python.exe .\build_version_info.py --print-version
 
 The output is `installer\TinyNetUse-Setup-<version>.exe`. Inno Setup receives `<version>` from `src\tinynetuse\version.py` through the command above.
 
+During an interactive install, the welcome page identifies an older installed
+version as an update, the same version as a reinstall or repair, and a newer
+installed version as a downgrade. This includes the legacy machine-wide 1.0.0
+installation. Installation is allowed in every case. Silent installs remain
+non-interactive and do not show the welcome page.
+
 For a normal release build, `build.bat` runs the folder build and installer compile in sequence:
 
 ```powershell
@@ -223,7 +229,7 @@ The release contains:
 
 The generated release notes can be edited on GitHub when a release needs hand-written details. Nothing is published by CI or by an untagged build.
 
-Before tagging, manually test the installer and portable package on 64-bit Windows 11. Check first install, upgrade over the previous version, startup behavior, repeated launches, overlay recovery, and uninstall.
+Before tagging, manually test the installer and portable package on 64-bit Windows 11. Check first install, upgrade from an older version, reinstalling the same version, downgrading from a newer version, silent installation, startup behavior, repeated launches, overlay recovery, and uninstall.
 
 ### Future SignPath signing
 

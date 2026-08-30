@@ -41,6 +41,7 @@ RestartApplications=no
 SetupIconFile=..\assets\windows-classic\TinyNetUse.ico
 WizardStyle=modern
 WizardSizePercent=100
+DisableWelcomePage=no
 LicenseFile=..\LICENSE
 
 OutputDir=..\installer
@@ -83,6 +84,7 @@ Type: files; Name: "{userstartup}\{#AppName}.lnk"
 
 [Code]
 const
+  CurrentUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3F1B2C4-9E87-4D56-BF12-7C3A05E91D28}_is1';
   LegacyUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3F1B2C4-9E87-4D56-BF12-7C3A05E91D28}_is1';
 
 var
@@ -96,6 +98,85 @@ begin
   if FileExists(ExpandConstant('{app}\{#AppExeName}')) then
     Exec(ExpandConstant('{app}\{#AppExeName}'), '--quit', '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode);
+end;
+
+function ReadVersionPart(var Remaining: String; var Value: Word): Boolean;
+var
+  Separator: Integer;
+  Part: String;
+  ParsedValue: Integer;
+begin
+  Separator := Pos('.', Remaining);
+  if Separator = 0 then
+  begin
+    Part := Remaining;
+    Remaining := '';
+  end
+  else
+  begin
+    Part := Copy(Remaining, 1, Separator - 1);
+    Delete(Remaining, 1, Separator);
+  end;
+
+  ParsedValue := StrToIntDef(Part, -1);
+  Result := (Part <> '') and (ParsedValue >= 0) and (ParsedValue <= 65535);
+  if Result then
+    Value := ParsedValue;
+end;
+
+function PackVersionString(const Version: String; var PackedVersion: Int64): Boolean;
+var
+  Remaining: String;
+  Major: Word;
+  Minor: Word;
+  Revision: Word;
+begin
+  Remaining := Version;
+  Result := ReadVersionPart(Remaining, Major) and
+    ReadVersionPart(Remaining, Minor) and
+    ReadVersionPart(Remaining, Revision) and (Remaining = '');
+  if Result then
+    PackedVersion := PackVersionComponents(Major, Minor, Revision, 0);
+end;
+
+function InstalledVersionMessage: String;
+var
+  InstalledVersion: String;
+  InstalledPackedVersion: Int64;
+  CurrentPackedVersion: Int64;
+  Comparison: Integer;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKCU64, CurrentUninstallKey,
+    'DisplayVersion', InstalledVersion) and
+    not RegQueryStringValue(HKLM64, LegacyUninstallKey,
+      'DisplayVersion', InstalledVersion) then
+    Exit;
+  if
+    not PackVersionString(InstalledVersion, InstalledPackedVersion) or
+    not PackVersionString('{#AppVersion}', CurrentPackedVersion) then
+    Exit;
+
+  Comparison := ComparePackedVersion(InstalledPackedVersion, CurrentPackedVersion);
+  if Comparison < 0 then
+    Result := 'TinyNetUse ' + InstalledVersion + ' is installed.' + #13#10 +
+      'This setup will update it to version {#AppVersion}.'
+  else if Comparison = 0 then
+    Result := 'TinyNetUse ' + InstalledVersion + ' is already installed.' + #13#10 +
+      'This setup will reinstall or repair it.'
+  else
+    Result := 'TinyNetUse ' + InstalledVersion + ' is newer than this setup.' + #13#10 +
+      'This setup will downgrade it to version {#AppVersion}.';
+end;
+
+procedure InitializeWizard;
+var
+  VersionMessage: String;
+begin
+  VersionMessage := InstalledVersionMessage;
+  if VersionMessage <> '' then
+    WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption + #13#10 + #13#10 +
+      VersionMessage;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
