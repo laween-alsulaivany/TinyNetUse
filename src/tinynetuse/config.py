@@ -10,12 +10,12 @@ import re
 import sys
 import tempfile
 
-from tinynetuse.units import SUPPORTED_UNITS
+from tinynetuse.units import AUTO_UNITS, SUPPORTED_UNITS
 
 
 APP_NAME = "TinyNetUse"
 CONFIG_FILENAME = "config.json"
-CONFIG_VERSION = 7
+CONFIG_VERSION = 8
 PORTABLE_MARKER = "portable.flag"
 
 DEFAULTS = {
@@ -41,6 +41,7 @@ DEFAULTS = {
     "upload_color": "#FF8A65",
     "network_adapter": "auto",
     "unit": "auto",
+    "auto_unit_minimum": "B/s",
     "precision": 1,
     "notify_threshold": {"download": None, "upload": None},
 }
@@ -157,6 +158,8 @@ def validate_config(data) -> dict:
 
     if data.get("unit") in SUPPORTED_UNITS:
         clean["unit"] = data["unit"]
+    if data.get("auto_unit_minimum") in AUTO_UNITS:
+        clean["auto_unit_minimum"] = data["auto_unit_minimum"]
     if _valid_int(data.get("precision"), 0, 2):
         clean["precision"] = data["precision"]
 

@@ -56,6 +56,7 @@ class GraphWindow(QtWidgets.QDialog):
         # ── Data & State ──
         self.max_history = d.get("graph_history", 60)
         self.unit = d.get("unit", "MB/s")
+        self.auto_minimum_unit = d.get("auto_unit_minimum", "B/s")
         self.precision = d.get("precision", 2)
         self.bg_color = QtGui.QColor(0, 0, 0, 220)
         self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))
@@ -124,14 +125,7 @@ class GraphWindow(QtWidgets.QDialog):
         w = rect.width() - 2 * base_margin
         ox = base_margin
 
-        # Auto uses one unit for the whole graph.
-        display_unit = self.unit
-        if display_unit == "auto":
-            largest = max(
-                max(self.sent_hist, default=0.0),
-                max(self.recv_hist, default=0.0),
-            )
-            display_unit = select_auto_unit(largest)
+        display_unit = self._display_unit()
 
         sent_values = [
             convert_rate(rate, display_unit) for rate in self.sent_hist
@@ -281,6 +275,15 @@ class GraphWindow(QtWidgets.QDialog):
         self.config.data["graph_locked"] = self.locked
         self.config.save()
 
+    def _display_unit(self):
+        if self.unit != "auto":
+            return self.unit
+        largest = max(
+            max(self.sent_hist, default=0.0),
+            max(self.recv_hist, default=0.0),
+        )
+        return select_auto_unit(largest, self.auto_minimum_unit)
+
     def apply_settings(self):
         d = self.config.data
         new_max = d.get("graph_history", 60)
@@ -295,6 +298,7 @@ class GraphWindow(QtWidgets.QDialog):
             self.sent_hist = deque(sent, maxlen=new_max)
             self.recv_hist = deque(recv, maxlen=new_max)
         self.unit = d.get("unit", "MB/s")
+        self.auto_minimum_unit = d.get("auto_unit_minimum", "B/s")
         self.precision = d.get("precision", 2)
         self.setWindowOpacity(d.get("opacity", 1.0))
         self.line_dl = QtGui.QColor(d.get("download_color", "#4FC3F7"))

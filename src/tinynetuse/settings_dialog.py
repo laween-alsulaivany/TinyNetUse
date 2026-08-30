@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor
 from tinynetuse.config import Config, default_config, validate_config
 from tinynetuse.network import AUTO_ADAPTER, AUTO_ADAPTER_LABEL
 from tinynetuse.startup import disable_startup, enable_startup, is_startup_enabled, startup_shortcut_exists
-from tinynetuse.units import SUPPORTED_UNITS, THRESHOLD_UNIT, threshold_from_display, threshold_to_display
+from tinynetuse.units import AUTO_UNITS, SUPPORTED_UNITS, THRESHOLD_UNIT, threshold_from_display, threshold_to_display
 
 
 COLOR_KEYS = ("alert_color", "download_color", "upload_color", "font_color")
@@ -26,6 +26,7 @@ RESET_KEYS = (
     "upload_color",
     "network_adapter",
     "unit",
+    "auto_unit_minimum",
     "precision",
     "notify_threshold",
 )
@@ -92,6 +93,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.unit_combo = QtWidgets.QComboBox()
         self.unit_combo.addItems(SUPPORTED_UNITS)
         layout.addRow("Speed Unit:", self.unit_combo)
+
+        self.auto_minimum_label = QtWidgets.QLabel("Minimum Auto Unit:")
+        self.auto_minimum_combo = QtWidgets.QComboBox()
+        self.auto_minimum_combo.addItems(AUTO_UNITS)
+        self.auto_minimum_label.setBuddy(self.auto_minimum_combo)
+        layout.addRow(self.auto_minimum_label, self.auto_minimum_combo)
 
         self.prec_spin = QtWidgets.QSpinBox()
         self.prec_spin.setRange(0, 2)
@@ -206,6 +213,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self._threshold_unit = THRESHOLD_UNIT
         self._update_threshold_display(THRESHOLD_UNIT)
         self.unit_combo.currentTextChanged.connect(self._on_unit_changed)
+        self.unit_combo.currentTextChanged.connect(
+            self._update_auto_minimum_enabled
+        )
 
         self.buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
@@ -237,6 +247,8 @@ class SettingsDialog(QtWidgets.QDialog):
         self.adapter_combo.setCurrentIndex(max(0, adapter_index))
         self.interval.setValue(d["update_interval"])
         self.unit_combo.setCurrentText(d["unit"])
+        self.auto_minimum_combo.setCurrentText(d["auto_unit_minimum"])
+        self._update_auto_minimum_enabled(self.unit_combo.currentText())
         self.prec_spin.setValue(d["precision"])
         for direction, spin in self.threshold_spins.items():
             spin.setValue(
@@ -282,6 +294,11 @@ class SettingsDialog(QtWidgets.QDialog):
                 threshold_to_display(thresholds[direction], new_unit) or 0.0
             )
 
+    def _update_auto_minimum_enabled(self, unit):
+        enabled = unit == "auto"
+        self.auto_minimum_label.setEnabled(enabled)
+        self.auto_minimum_combo.setEnabled(enabled)
+
     def _on_hover_opacity_toggled(self, enabled):
         if enabled and self.click_through_check.isChecked():
             QtWidgets.QMessageBox.information(
@@ -318,6 +335,7 @@ class SettingsDialog(QtWidgets.QDialog):
         d["network_adapter"] = self.adapter_combo.currentData()
         d["update_interval"] = self.interval.value()
         d["unit"] = self.unit_combo.currentText()
+        d["auto_unit_minimum"] = self.auto_minimum_combo.currentText()
         d["precision"] = self.prec_spin.value()
         for direction, spin in self.threshold_spins.items():
             d["notify_threshold"][direction] = threshold_from_display(

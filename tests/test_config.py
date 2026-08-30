@@ -180,6 +180,16 @@ def test_click_through_takes_precedence_over_hover_opacity(tmp_path):
     assert config.data["reduce_opacity_on_hover"] is False
 
 
+def test_schema_seven_config_gains_the_default_auto_unit_minimum(tmp_path):
+    path = tmp_path / "config.json"
+    write_config(path, {"config_version": 7, "unit": "auto"})
+
+    config = Config(path)
+
+    assert config.data["config_version"] == CONFIG_VERSION
+    assert config.data["auto_unit_minimum"] == "B/s"
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [
@@ -199,6 +209,7 @@ def test_click_through_takes_precedence_over_hover_opacity(tmp_path):
         ("opacity", 0.19),
         ("opacity", 1.1),
         ("unit", "GB/s"),
+        ("auto_unit_minimum", "Kib/s"),
         ("precision", 3),
         ("network_adapter", ""),
         ("network_adapter", 123),

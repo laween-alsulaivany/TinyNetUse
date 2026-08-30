@@ -1,6 +1,7 @@
 import pytest
 
 from tinynetuse.units import (
+    AUTO_UNITS,
     SUPPORTED_UNITS,
     convert_rate,
     format_auto_rate,
@@ -73,6 +74,27 @@ def test_conversion_for_every_fixed_unit(bytes_per_sec, expected):
 def test_auto_selects_an_actual_unit(bytes_per_sec, expected_unit):
     assert select_auto_unit(bytes_per_sec) == expected_unit
     assert " auto" not in format_auto_rate(bytes_per_sec, 2)
+
+
+@pytest.mark.parametrize(
+    ("bytes_per_sec", "minimum_unit", "expected_unit"),
+    [
+        (0, "B/s", "B/s"),
+        (0, "KB/s", "KB/s"),
+        (1024, "KB/s", "KB/s"),
+        (1024, "MB/s", "MB/s"),
+        (MIB, "KB/s", "MB/s"),
+    ],
+)
+def test_auto_unit_respects_the_configured_minimum(
+    bytes_per_sec, minimum_unit, expected_unit
+):
+    assert minimum_unit in AUTO_UNITS
+    assert select_auto_unit(bytes_per_sec, minimum_unit) == expected_unit
+
+
+def test_auto_format_uses_the_configured_minimum_unit():
+    assert format_auto_rate(500, 2, "KB/s") == "0.49 KB/s"
 
 
 @pytest.mark.parametrize("precision", [0, 1, 2])

@@ -286,6 +286,27 @@ def test_both_thresholds_keep_the_same_rate_when_units_change(
     assert dialog.upload_threshold_spin.suffix() == " Mib/s"
 
 
+def test_auto_unit_minimum_is_available_only_in_auto_mode(
+    tmp_path, qtbot, monkeypatch
+):
+    dialog, _, config = make_dialog(tmp_path, qtbot, monkeypatch)
+
+    assert dialog.auto_minimum_combo.isEnabled()
+    assert [
+        dialog.auto_minimum_combo.itemText(index)
+        for index in range(dialog.auto_minimum_combo.count())
+    ] == ["B/s", "KB/s", "MB/s"]
+
+    dialog.unit_combo.setCurrentText("MB/s")
+    assert not dialog.auto_minimum_combo.isEnabled()
+
+    dialog.unit_combo.setCurrentText("auto")
+    dialog.auto_minimum_combo.setCurrentText("KB/s")
+    dialog.accept()
+
+    assert config.data["auto_unit_minimum"] == "KB/s"
+
+
 def test_opacity_control_enforces_safe_range(tmp_path, qtbot, monkeypatch):
     dialog, _, _ = make_dialog(tmp_path, qtbot, monkeypatch)
 

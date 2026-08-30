@@ -244,6 +244,25 @@ def test_overlay_updates_labels_graph_and_alert_rendering(
     )
 
 
+def test_overlay_auto_unit_respects_the_configured_minimum(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0), (0, 500)],
+    )
+    widget.config.data.update(
+        {"unit": "auto", "auto_unit_minimum": "KB/s", "precision": 2}
+    )
+    widget.apply_settings()
+
+    widget._update_speeds()
+
+    assert widget.dl_label.text() == f"{chr(0x2193)} 0.49 KB/s"
+
+
 def test_tray_tooltip_shows_the_auto_resolved_adapter(
     tmp_path, qtbot, monkeypatch
 ):

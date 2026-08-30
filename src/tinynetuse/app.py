@@ -204,6 +204,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
 
         # Formatting
         self.unit = d["unit"]
+        self.auto_minimum_unit = d["auto_unit_minimum"]
         self.precision = d["precision"]
         self.download_threshold = threshold_bytes_per_sec(
             d["notify_threshold"].get("download")
@@ -295,10 +296,22 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             self.graph_window.add_sample(sent_per_sec, recv_per_sec)
 
         self.dl_label.setText(
-            "↓ " + format_rate(recv_per_sec, self.unit, self.precision)
+            "↓ "
+            + format_rate(
+                recv_per_sec,
+                self.unit,
+                self.precision,
+                self.auto_minimum_unit,
+            )
         )
         self.ul_label.setText(
-            "↑ " + format_rate(sent_per_sec, self.unit, self.precision)
+            "↑ "
+            + format_rate(
+                sent_per_sec,
+                self.unit,
+                self.precision,
+                self.auto_minimum_unit,
+            )
         )
 
         self._alert_active = False

@@ -93,6 +93,16 @@ def test_graph_labels_use_the_application_font_not_overlay_preferences(
     assert label_font.pointSize() == 12
 
 
+def test_graph_auto_unit_respects_the_configured_minimum(tmp_path, qtbot):
+    config = Config(tmp_path / "config.json")
+    config.data.update({"unit": "auto", "auto_unit_minimum": "KB/s"})
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+    graph.add_sample(100, 500)
+
+    assert graph._display_unit() == "KB/s"
+
+
 def test_graph_close_notifies_owner_without_saving_twice(tmp_path, qtbot):
     config = Config(tmp_path / "config.json")
     graph = GraphWindow(config=config)

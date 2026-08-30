@@ -2,6 +2,7 @@
 
 
 SUPPORTED_UNITS = ["auto", "B/s", "KB/s", "MB/s", "b/s", "Kib/s", "Mib/s"]
+AUTO_UNITS = ("B/s", "KB/s", "MB/s")
 
 KIB = 1024
 MIB = 1024 * 1024
@@ -26,27 +27,36 @@ def convert_rate(rate_bytes_per_sec: float, unit: str) -> float:
 
 
 # Picks B/s, KB/s, or MB/s for auto display.
-def select_auto_unit(rate_bytes_per_sec: float) -> str:
+def select_auto_unit(rate_bytes_per_sec: float, minimum_unit="B/s") -> str:
     rate = max(0.0, rate_bytes_per_sec)
     if rate >= MIB:
-        return "MB/s"
-    if rate >= KIB:
-        return "KB/s"
-    # B/s keeps zero and very small rates readable instead of rounding KB/s to zero.
-    return "B/s"
+        selected = "MB/s"
+    elif rate >= KIB:
+        selected = "KB/s"
+    else:
+        # B/s keeps zero and very small rates readable instead of rounding KB/s to zero.
+        selected = "B/s"
+    return AUTO_UNITS[max(AUTO_UNITS.index(selected), AUTO_UNITS.index(minimum_unit))]
 
 
 # Formats a rate for the overlay and graph labels.
-def format_rate(rate_bytes_per_sec: float, unit: str, precision: int) -> str:
+def format_rate(
+    rate_bytes_per_sec: float,
+    unit: str,
+    precision: int,
+    auto_minimum_unit="B/s",
+) -> str:
     if unit == "auto":
-        unit = select_auto_unit(rate_bytes_per_sec)
+        unit = select_auto_unit(rate_bytes_per_sec, auto_minimum_unit)
     value = convert_rate(rate_bytes_per_sec, unit)
     return f"{value:.{precision}f} {unit}"
 
 
 # Formats a rate using the auto unit rules. meant for testing, not used in the main application.
-def format_auto_rate(rate_bytes_per_sec: float, precision: int) -> str:
-    return format_rate(rate_bytes_per_sec, "auto", precision)
+def format_auto_rate(
+    rate_bytes_per_sec: float, precision: int, auto_minimum_unit="B/s"
+) -> str:
+    return format_rate(rate_bytes_per_sec, "auto", precision, auto_minimum_unit)
 
 
 # Note: All thresholds are internally stored as MB/s in the configuration for consistency. The two methods below
