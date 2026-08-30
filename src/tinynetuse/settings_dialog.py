@@ -209,11 +209,11 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.btn_dl = QtWidgets.QPushButton()
         self.btn_dl.clicked.connect(lambda: self._pick("download_color", self.btn_dl))
-        graph_layout.addRow("Download Color:", self.btn_dl)
+        graph_layout.addRow("Graph Download Color:", self.btn_dl)
 
         self.btn_ul = QtWidgets.QPushButton()
         self.btn_ul.clicked.connect(lambda: self._pick("upload_color", self.btn_ul))
-        graph_layout.addRow("Upload Color:", self.btn_ul)
+        graph_layout.addRow("Graph Upload Color:", self.btn_ul)
 
         self.boot_chk = QtWidgets.QCheckBox("Launch at Startup")
         application_layout.addRow(self.boot_chk)

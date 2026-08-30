@@ -207,11 +207,13 @@ def test_reopening_graph_reuses_and_clears_the_real_window(
     assert graph.last_ul == 100
     assert graph.last_dl == 250
 
+    graph._toggle_pause(True)
     widget.toggle_graph(False)
     widget.toggle_graph(True)
 
     assert widget.graph_window is graph
     assert graph.isVisible()
+    assert not graph.paused
     assert not any(graph.sent_hist)
     assert not any(graph.recv_hist)
 

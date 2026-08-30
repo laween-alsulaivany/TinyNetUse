@@ -129,7 +129,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 self.graph_window = GraphWindow(parent=self, config=self.config)
                 self.graph_window.closed.connect(self._on_graph_closed)
             elif not self.graph_window.isVisible():
-                self.graph_window.clear_history()
+                self.graph_window.reset_for_reopen()
             self.graph_window.show()
             self.graph_window.raise_()
             self.graph_window.activateWindow()

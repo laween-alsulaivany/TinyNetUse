@@ -57,7 +57,7 @@ Your settings and window positions are saved automatically.
 
 ## Screenshots
 
-The graph displays recent download and upload activity using the same units as the overlay.
+The graph displays recent download and upload activity using the same units as the overlay, with a current-value legend, a visible unit scale, and horizontal grid lines. Use its context menu to pause sampling temporarily or clear its history.
 
 <p align="center">
   <img src="docs/screenshots/tinynetuse-graph.png"

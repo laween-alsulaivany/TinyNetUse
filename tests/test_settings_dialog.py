@@ -324,6 +324,12 @@ def test_settings_controls_are_grouped_by_scope(tmp_path, qtbot, monkeypatch):
     assert dialog.widget_group.layout().indexOf(dialog.opacity_spin) >= 0
     assert dialog.graph_group.layout().indexOf(dialog.btn_dl) >= 0
     assert dialog.graph_group.layout().indexOf(dialog.btn_ul) >= 0
+    assert dialog.graph_group.layout().labelForField(dialog.btn_dl).text() == (
+        "Graph Download Color:"
+    )
+    assert dialog.graph_group.layout().labelForField(dialog.btn_ul).text() == (
+        "Graph Upload Color:"
+    )
 
 
 def test_opacity_control_enforces_safe_range(tmp_path, qtbot, monkeypatch):

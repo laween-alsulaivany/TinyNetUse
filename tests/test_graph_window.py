@@ -32,6 +32,58 @@ def test_graph_history_is_cleared_when_network_source_changes(tmp_path, qtbot):
     assert not any(graph.recv_hist)
     assert graph.last_ul == 0
     assert graph.last_dl == 0
+    assert not graph.has_samples
+
+
+def test_paused_graph_keeps_its_samples_and_resets_when_reopened(
+    tmp_path, qtbot
+):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.add_sample(100, 250)
+
+    graph._toggle_pause(True)
+    graph.add_sample(200, 500)
+
+    assert graph.paused
+    assert graph.last_ul == 100
+    assert graph.last_dl == 250
+
+    graph.reset_for_reopen()
+
+    assert not graph.paused
+    assert not graph.has_samples
+    assert not any(graph.sent_hist)
+    assert not any(graph.recv_hist)
+
+
+def test_graph_waits_for_a_sample_before_plotting_history(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+
+    assert not graph.has_samples
+
+    graph.add_sample(0, 0)
+
+    assert graph.has_samples
+
+
+def test_graph_renders_waiting_and_sampled_states(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.resize(320, 200)
+    graph.show()
+    qtbot.waitExposed(graph)
+
+    waiting_image = graph.grab().toImage()
+    graph.add_sample(100, 250)
+    sampled_image = graph.grab().toImage()
+
+    assert waiting_image.width() == graph.width() * waiting_image.devicePixelRatio()
+    assert waiting_image.height() == graph.height() * waiting_image.devicePixelRatio()
+    assert sampled_image.width() == graph.width() * sampled_image.devicePixelRatio()
+    assert sampled_image.height() == graph.height() * sampled_image.devicePixelRatio()
+    assert waiting_image != sampled_image
 
 
 def test_graph_resizes_history_without_discarding_recent_samples(

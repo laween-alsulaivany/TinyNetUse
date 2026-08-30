@@ -66,6 +66,8 @@ class GraphWindow(QtWidgets.QDialog):
         self.last_dl = 0.0
         self.last_ul = 0.0
         self.auto_scale = True
+        self.has_samples = False
+        self.paused = False
 
         # ── Drag & Resize State ──
         self._drag_offset = None
@@ -88,10 +90,13 @@ class GraphWindow(QtWidgets.QDialog):
 
     # The main widget passes in the one shared sampler result.
     def add_sample(self, sent_bps, recv_bps):
+        if self.paused:
+            return
         self.last_ul = sent_bps
         self.last_dl = recv_bps
         self.sent_hist.append(sent_bps)
         self.recv_hist.append(recv_bps)
+        self.has_samples = True
         self.update()
 
     # Old samples belong to the previous adapter and should not be mixed in.
@@ -100,6 +105,15 @@ class GraphWindow(QtWidgets.QDialog):
         self.recv_hist = deque([0.0] * self.max_history, maxlen=self.max_history)
         self.last_dl = 0.0
         self.last_ul = 0.0
+        self.has_samples = False
+        self.update()
+
+    def reset_for_reopen(self):
+        self.paused = False
+        self.clear_history()
+
+    def _toggle_pause(self, paused):
+        self.paused = bool(paused)
         self.update()
 
     def _label_font(self):
@@ -118,14 +132,20 @@ class GraphWindow(QtWidgets.QDialog):
         path.addRoundedRect(QRectF(rect), 12, 12)
         painter.fillPath(path, self.bg_color)
 
-        # Dynamic margins and scaling based on window size
-        base_margin = max(8, min(rect.width(), rect.height()) * 0.02)
-        oy = base_margin
-        h = rect.height() - 2 * base_margin
-        w = rect.width() - 2 * base_margin
-        ox = base_margin
-
         display_unit = self._display_unit()
+        painter.setFont(self._label_font())
+        metrics = painter.fontMetrics()
+        base_margin = max(8, min(rect.width(), rect.height()) * 0.02)
+        legend_height = metrics.height() + 6
+        scale_min = f"{0:.{self.precision}f} {display_unit}"
+
+        if not self.has_samples:
+            painter.setPen(QtGui.QPen(QtGui.QColor("#B8C0CC")))
+            painter.drawText(
+                QRectF(rect), Qt.AlignCenter, "Waiting for network samples..."
+            )
+            self._draw_border_and_resize_grip(painter, rect)
+            return
 
         sent_values = [
             convert_rate(rate, display_unit) for rate in self.sent_hist
@@ -135,10 +155,54 @@ class GraphWindow(QtWidgets.QDialog):
         ]
         all_vals = sent_values + recv_values
         maxv = max(max(all_vals, default=0.0), 0.001) * 1.2
+        scale_max = f"{maxv:.{self.precision}f} {display_unit}"
+        scale_width = max(
+            metrics.horizontalAdvance(scale_min),
+            metrics.horizontalAdvance(scale_max),
+        )
+        ox = base_margin + scale_width + 6
+        oy = base_margin + legend_height
+        w = rect.width() - ox - base_margin
+        h = rect.height() - oy - base_margin - metrics.height()
+
+        legend_gap = 8
+        legend_width = max(1, int((w - legend_gap) / 2))
+        dl_label = f"↓ {format_rate(self.last_dl, display_unit, self.precision)}"
+        ul_label = f"↑ {format_rate(self.last_ul, display_unit, self.precision)}"
+        dl_label = metrics.elidedText(dl_label, Qt.ElideRight, legend_width)
+        ul_label = metrics.elidedText(ul_label, Qt.ElideRight, legend_width)
+        painter.setPen(QtGui.QPen(self.line_dl))
+        painter.drawText(
+            QRectF(ox, base_margin, legend_width, legend_height),
+            Qt.AlignLeft | Qt.AlignVCenter,
+            dl_label,
+        )
+        painter.setPen(QtGui.QPen(self.line_ul))
+        painter.drawText(
+            QRectF(ox + legend_width + legend_gap, base_margin, legend_width, legend_height),
+            Qt.AlignRight | Qt.AlignVCenter,
+            ul_label,
+        )
+
+        for index in range(5):
+            y = oy + h * index / 4
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 38), 1))
+            painter.drawLine(QtCore.QPointF(ox, y), QtCore.QPointF(ox + w, y))
+
+        painter.setPen(QtGui.QPen(QtGui.QColor("#B8C0CC")))
+        painter.drawText(
+            QRectF(base_margin, oy - metrics.height() / 2, scale_width, metrics.height()),
+            Qt.AlignRight | Qt.AlignVCenter,
+            scale_max,
+        )
+        painter.drawText(
+            QRectF(base_margin, oy + h - metrics.height() / 2, scale_width, metrics.height()),
+            Qt.AlignRight | Qt.AlignVCenter,
+            scale_min,
+        )
 
         # Dynamic line thickness (1 to 3 pixels)
         line_thickness = max(1, min(3, rect.width() * 0.005))  # 0.5% of width
-        dash_thickness = max(0.5, line_thickness * 0.5)
 
         # Draw graph lines
         def draw_series(data, color):
@@ -154,44 +218,12 @@ class GraphWindow(QtWidgets.QDialog):
         draw_series(recv_values, self.line_dl)
         draw_series(sent_values, self.line_ul)
 
-        painter.setFont(self._label_font())
+        self._draw_border_and_resize_grip(painter, rect)
 
-        # Calculate label positions
-        last_dl = convert_rate(self.last_dl, display_unit)
-        last_ul = convert_rate(self.last_ul, display_unit)
-        y_dl = oy + h - (last_dl / maxv) * h
-        y_ul = oy + h - (last_ul / maxv) * h
-
-        # Format labels with dynamic precision
-        precision = self.precision
-        dl_label = f"↓ {format_rate(self.last_dl, display_unit, precision)}"
-        ul_label = f"↑ {format_rate(self.last_ul, display_unit, precision)}"
-
-        # Draw download speed (left side)
-        painter.setPen(QtGui.QPen(self.line_dl, dash_thickness, QtCore.Qt.DashLine))
-        painter.drawLine(QtCore.QPointF(ox, y_dl), QtCore.QPointF(ox + w, y_dl))
-        dl_rect = painter.fontMetrics().boundingRect(dl_label)
-        dl_rect.adjust(-4, -2, 4, 2)
-        dl_rect.moveTo(int(ox), int(y_dl - dl_rect.height() - 2))
-        painter.fillRect(dl_rect, QtGui.QColor(0, 0, 0, 180))
-        painter.setPen(QtGui.QPen(self.line_dl))
-        painter.drawText(dl_rect, Qt.AlignCenter, dl_label)
-
-        # Draw upload speed (right side)
-        painter.setPen(QtGui.QPen(self.line_ul, dash_thickness, QtCore.Qt.DashLine))
-        painter.drawLine(QtCore.QPointF(ox, y_ul), QtCore.QPointF(ox + w, y_ul))
-        ul_rect = painter.fontMetrics().boundingRect(ul_label)
-        ul_rect.adjust(-4, -2, 4, 2)
-        ul_rect.moveTo(int(ox + w - ul_rect.width()), int(y_ul - ul_rect.height() - 2))
-        painter.fillRect(ul_rect, QtGui.QColor(0, 0, 0, 180))
-        painter.setPen(QtGui.QPen(self.line_ul))
-        painter.drawText(ul_rect, Qt.AlignCenter, ul_label)
-
-        # Border
+    def _draw_border_and_resize_grip(self, painter, rect):
         painter.setPen(QtGui.QPen(QtGui.QColor("#444"), 2))
         painter.drawRoundedRect(QRectF(rect).adjusted(1, 1, -1, -1), 12, 12)
 
-        # Draw resize grip
         painter.setPen(QtGui.QPen(QtGui.QColor("#aaa")))
         grip_size = max(8, min(16, rect.width() * 0.03))
         for i in range(4, int(grip_size), 4):
@@ -252,6 +284,13 @@ class GraphWindow(QtWidgets.QDialog):
         lock.setChecked(self.locked)
         lock.triggered.connect(self._toggle_lock)
         menu.addAction(lock)
+        pause = QAction("Pause Graph", self, checkable=True)
+        pause.setChecked(self.paused)
+        pause.triggered.connect(self._toggle_pause)
+        menu.addAction(pause)
+        clear_history = QAction("Clear History", self)
+        clear_history.triggered.connect(self.clear_history)
+        menu.addAction(clear_history)
         swap_colors = QAction("Swap Colors", self)
         swap_colors.triggered.connect(self._swap_colors)
         menu.addAction(swap_colors)
