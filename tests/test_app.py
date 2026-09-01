@@ -31,7 +31,7 @@ def make_widget(tmp_path, qtbot, monkeypatch, samples):
             "network_adapter": "Ethernet",
             "unit": "MB/s",
             "precision": 1,
-            "notify_threshold": {"download": 1, "upload": None},
+            "notify_threshold": {"download": 1, "upload": 5},
             "alert_color": "#123456",
         }
     )
@@ -240,10 +240,25 @@ def test_overlay_updates_labels_graph_and_alert_rendering(
     assert widget.ul_label.text() == f"{chr(0x2191)} 1.0 MB/s"
     assert graph.last_dl == 2_097_152
     assert graph.last_ul == 1_048_576
+    # download is over its 1 MB/s threshold, upload (5 MB/s) isn't
     assert widget._alert_active
-    assert widget.grab().toImage().pixelColor(120, 100) == QtGui.QColor(
-        "#123456"
-    )
+    assert widget._download_alert
+    assert not widget._upload_alert
+
+    widget.timer.stop()  # a stray tick here would drain the stub sampler
+
+    # alert_color should only tint the download indicator, not the whole overlay
+    image = widget.grab().toImage()
+    dpr = image.devicePixelRatio()
+
+    def pixel_at(x, y):
+        return image.pixelColor(round(x * dpr), round(y * dpr))
+
+    dl_center_y = widget.dl_label.geometry().center().y()
+    ul_center_y = widget.ul_label.geometry().center().y()
+    indicator_x = app_module.ROW_INDICATOR_X + app_module.ROW_INDICATOR_WIDTH / 2
+    assert pixel_at(indicator_x, dl_center_y) == QtGui.QColor("#123456")
+    assert pixel_at(indicator_x, ul_center_y) != QtGui.QColor("#123456")
 
 
 def test_overlay_auto_unit_respects_the_configured_minimum(

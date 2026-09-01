@@ -22,6 +22,11 @@ OVERLAY_DEFAULT_SIZE = QtCore.QSize(140, 60)
 OVERLAY_MINIMUM_SIZE = QtCore.QSize(100, 40)
 HOVER_OPACITY = 0.25
 
+# row indicator bars live in the left margin, left of the label text
+ROW_INDICATOR_X = 6.0
+ROW_INDICATOR_WIDTH = 4.0
+ROW_INDICATOR_TEXT_GAP = 6.0
+
 
 def _asset_path(relative: str) -> str:
     # PyInstaller extracts bundled files to _MEIPASS.
@@ -59,7 +64,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
 
         # ── Labels ──
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        left_margin = ROW_INDICATOR_X + ROW_INDICATOR_WIDTH + ROW_INDICATOR_TEXT_GAP
+        layout.setContentsMargins(int(left_margin), 8, 8, 8)
         layout.setSpacing(2)
         self.dl_label = QtWidgets.QLabel()
         self.ul_label = QtWidgets.QLabel()
@@ -314,37 +320,77 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             )
         )
 
-        self._alert_active = False
-        download_high = (
+        self._download_alert = (
             self.download_threshold is not None
             and recv_per_sec > self.download_threshold
         )
-        upload_high = (
+        self._upload_alert = (
             self.upload_threshold is not None
             and sent_per_sec > self.upload_threshold
         )
-        self._alert_active = download_high or upload_high
+        self._alert_active = self._download_alert or self._upload_alert
 
         self.update()  # for trigger repaint
 
     def paintEvent(self, event):
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 8.0, 8.0)
+        radius = 8.0
+        rect = QRectF(self.rect())
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing)
 
-        # Change background color based on alert state
+        # bg is always dark/translucent, alert_color is only ever an accent
+        bg_path = QtGui.QPainterPath()
+        bg_path.addRoundedRect(rect, radius, radius)
+        p.fillPath(bg_path, QtGui.QColor(0, 0, 0, 160))
+
         if getattr(self, "_alert_active", False):
-            bg_color = QtGui.QColor(self.alert_color)
-        else:
-            bg_color = QtGui.QColor(0, 0, 0, 160)
-        p.fillPath(path, bg_color)
+            self._paint_alert_border(p, rect, radius)
+        self._paint_row_indicators(p)
 
         # For Drag Handle
         p.setPen(QtGui.QPen(QtGui.QColor("#aaa")))
         size = 16
         for i in range(4, size, 4):
             p.drawLine(self.width() - i, self.height(), self.width(), self.height() - i)
+
+    def _paint_alert_border(self, p, rect, radius):
+        color = QtGui.QColor(self.alert_color)
+        border_rect = rect.adjusted(1.0, 1.0, -1.0, -1.0)
+        p.setBrush(Qt.NoBrush)
+
+        # glow: a few fading passes, widest/faintest first, corners get more overlap naturally
+        for width, alpha in ((6.0, 25), (4.0, 45), (2.0, 75)):
+            glow = QtGui.QColor(color)
+            glow.setAlpha(alpha)
+            p.setPen(QtGui.QPen(glow, width))
+            p.drawRoundedRect(border_rect, radius, radius)
+
+        # crisp rim on top
+        rim = QtGui.QColor(color)
+        rim.setAlpha(235)
+        p.setPen(QtGui.QPen(rim, 1.4))
+        p.drawRoundedRect(border_rect, radius, radius)
+
+    def _paint_row_indicators(self, p):
+        neutral_color = QtGui.QColor(70, 70, 70, 210)
+        alert_qcolor = QtGui.QColor(self.alert_color)
+
+        p.setPen(Qt.NoPen)
+        for label, active in (
+            (self.dl_label, getattr(self, "_download_alert", False)),
+            (self.ul_label, getattr(self, "_upload_alert", False)),
+        ):
+            # tied to font metrics, not label geometry, so resizing the widget doesn't stretch the bar
+            bar_height = label.fontMetrics().height() * 0.75
+            center_y = label.geometry().center().y()
+            bar_rect = QRectF(
+                ROW_INDICATOR_X,
+                center_y - bar_height / 2,
+                ROW_INDICATOR_WIDTH,
+                bar_height,
+            )
+            p.setBrush(alert_qcolor if active else neutral_color)
+            p.drawRoundedRect(bar_rect, ROW_INDICATOR_WIDTH / 2, ROW_INDICATOR_WIDTH / 2)
 
     def enterEvent(self, event):
         self._pointer_over_overlay = True
