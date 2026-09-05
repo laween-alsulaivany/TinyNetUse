@@ -80,19 +80,24 @@ def test_main_menu_is_short_and_logically_ordered(qtbot):
     assert menu_labels(menu) == [
         "Hide Overlay",
         "Show Graph",
-        "Always On Top",
-        "Lock Position",
-        "Click Through Overlay",
+        "Overlay Options",
         "Settings",
-        "Reset Window Positions",
         "About TinyNetUse",
         "<separator>",
         "Quit",
     ]
     assert menu.actions()[1].isChecked()
-    assert not menu.actions()[2].isChecked()
-    assert menu.actions()[3].isChecked()
-    assert not menu.actions()[4].isChecked()
+    overlay_options = menu.actions()[2].menu()
+    assert isinstance(overlay_options, QtWidgets.QMenu)
+    assert menu_labels(overlay_options) == [
+        "Always On Top",
+        "Lock Position",
+        "Click Through Overlay",
+        "Reset Window Positions",
+    ]
+    assert not overlay_options.actions()[0].isChecked()
+    assert overlay_options.actions()[1].isChecked()
+    assert not overlay_options.actions()[2].isChecked()
 
 
 def test_menu_offers_show_when_overlay_is_hidden(qtbot):

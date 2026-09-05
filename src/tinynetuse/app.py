@@ -506,23 +506,26 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         graph.setChecked(self.graph_visible)
         graph.triggered.connect(self.toggle_graph)
 
-        atop = menu.addAction("Always On Top")
+        overlay_options = QtWidgets.QMenu("Overlay Options", menu)
+        menu.addMenu(overlay_options)
+
+        atop = overlay_options.addAction("Always On Top")
         atop.setCheckable(True)
         atop.setChecked(self.always_on_top)
         atop.triggered.connect(self.toggle_always_on_top)
 
-        lock = menu.addAction("Lock Position")
+        lock = overlay_options.addAction("Lock Position")
         lock.setCheckable(True)
         lock.setChecked(self.locked)
         lock.triggered.connect(self.toggle_lock)
 
-        click_through = menu.addAction("Click Through Overlay")
+        click_through = overlay_options.addAction("Click Through Overlay")
         click_through.setCheckable(True)
         click_through.setChecked(self.click_through_overlay)
         click_through.triggered.connect(self.toggle_click_through)
 
         menu.addAction("Settings", self.open_settings)
-        menu.addAction("Reset Window Positions", self.reset_window_positions)
+        overlay_options.addAction("Reset Window Positions", self.reset_window_positions)
         menu.addAction("About TinyNetUse", self.open_about)
         menu.addSeparator()
         menu.addAction("Quit", QtWidgets.QApplication.quit)
