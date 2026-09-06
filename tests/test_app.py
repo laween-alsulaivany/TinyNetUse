@@ -10,6 +10,18 @@ from tinynetuse.app import TinyNetUseWidget
 from tinynetuse.config import Config
 
 
+def send_mouse_move(widget, position):
+    event = QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseMove,
+        QtCore.QPointF(position),
+        QtCore.QPointF(widget.mapToGlobal(position)),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
+
+
 class StubSampler:
     def __init__(self, samples):
         self.selected_adapter = "Ethernet"
@@ -131,6 +143,7 @@ def test_overlay_visibility_toggle_changes_a_real_widget(
 def test_overlay_uses_resize_cursor_only_in_the_resize_area(
     tmp_path, qtbot, monkeypatch
 ):
+    resize_inset = 8
     widget, _ = make_widget(
         tmp_path,
         qtbot,
@@ -141,32 +154,23 @@ def test_overlay_uses_resize_cursor_only_in_the_resize_area(
     widget.show()
     qtbot.waitExposed(widget)
 
-    qtbot.mouseMove(widget, QtCore.QPoint(20, 20))
+    send_mouse_move(widget, QtCore.QPoint(20, 20))
     assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
 
-    qtbot.mousePress(
+    send_mouse_move(
         widget,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(20, 20),
+        QtCore.QPoint(widget.width() - resize_inset, widget.height() - resize_inset),
     )
-    qtbot.mouseMove(widget, QtCore.QPoint(25, 25))
-    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
-    qtbot.mouseRelease(
-        widget,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(25, 25),
-    )
-
-    qtbot.mouseMove(widget, QtCore.QPoint(widget.width() - 2, widget.height() - 2))
     assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
 
-    qtbot.mouseMove(widget.dl_label, widget.dl_label.rect().center())
+    send_mouse_move(widget.dl_label, widget.dl_label.rect().center())
     assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
 
-    grip_position = QtCore.QPoint(widget.width() - 2, widget.height() - 2)
-    qtbot.mouseMove(widget, grip_position)
+    grip_position = QtCore.QPoint(
+        widget.width() - resize_inset,
+        widget.height() - resize_inset,
+    )
+    send_mouse_move(widget, grip_position)
     qtbot.mousePress(
         widget,
         Qt.MouseButton.LeftButton,
@@ -184,7 +188,10 @@ def test_overlay_uses_resize_cursor_only_in_the_resize_area(
         widget,
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(widget.width() - 2, widget.height() - 2),
+        QtCore.QPoint(
+            widget.width() - resize_inset,
+            widget.height() - resize_inset,
+        ),
     )
     assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
 

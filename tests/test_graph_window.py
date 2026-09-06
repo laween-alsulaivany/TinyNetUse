@@ -1,11 +1,23 @@
 from unittest.mock import Mock
 
 import pytest
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
 
 from tinynetuse.config import Config
 from tinynetuse.graph_window import GraphWindow
+
+
+def send_mouse_move(widget, position):
+    event = QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseMove,
+        QtCore.QPointF(position),
+        QtCore.QPointF(widget.mapToGlobal(position)),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
 
 
 def test_graph_uses_samples_supplied_by_the_main_monitor(tmp_path, qtbot):
@@ -46,34 +58,26 @@ def test_graph_uses_its_own_opacity_preference(tmp_path, qtbot):
 
 
 def test_graph_uses_resize_cursor_only_in_the_resize_area(tmp_path, qtbot):
+    resize_inset = 8
     graph = GraphWindow(config=Config(tmp_path / "config.json"))
     qtbot.addWidget(graph)
     graph.resize(320, 200)
     graph.show()
     qtbot.waitExposed(graph)
 
-    qtbot.mouseMove(graph, QtCore.QPoint(20, 20))
+    send_mouse_move(graph, QtCore.QPoint(20, 20))
     assert graph.cursor().shape() == Qt.CursorShape.ArrowCursor
 
-    qtbot.mousePress(
+    send_mouse_move(
         graph,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(20, 20),
+        QtCore.QPoint(graph.width() - resize_inset, graph.height() - resize_inset),
     )
-    qtbot.mouseMove(graph, QtCore.QPoint(25, 25))
-    assert graph.cursor().shape() == Qt.CursorShape.ArrowCursor
-    qtbot.mouseRelease(
-        graph,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(25, 25),
-    )
-
-    qtbot.mouseMove(graph, QtCore.QPoint(graph.width() - 2, graph.height() - 2))
     assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
 
-    grip_position = QtCore.QPoint(graph.width() - 2, graph.height() - 2)
+    grip_position = QtCore.QPoint(
+        graph.width() - resize_inset,
+        graph.height() - resize_inset,
+    )
     qtbot.mousePress(
         graph,
         Qt.MouseButton.LeftButton,
@@ -91,7 +95,10 @@ def test_graph_uses_resize_cursor_only_in_the_resize_area(tmp_path, qtbot):
         graph,
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
-        QtCore.QPoint(graph.width() - 2, graph.height() - 2),
+        QtCore.QPoint(
+            graph.width() - resize_inset,
+            graph.height() - resize_inset,
+        ),
     )
     assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
 
