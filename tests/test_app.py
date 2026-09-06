@@ -128,6 +128,67 @@ def test_overlay_visibility_toggle_changes_a_real_widget(
     assert widget.isVisible()
 
 
+def test_overlay_uses_resize_cursor_only_in_the_resize_area(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.resize(140, 60)
+    widget.show()
+    qtbot.waitExposed(widget)
+
+    qtbot.mouseMove(widget, QtCore.QPoint(20, 20))
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    qtbot.mousePress(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(20, 20),
+    )
+    qtbot.mouseMove(widget, QtCore.QPoint(25, 25))
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+    qtbot.mouseRelease(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(25, 25),
+    )
+
+    qtbot.mouseMove(widget, QtCore.QPoint(widget.width() - 2, widget.height() - 2))
+    assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+    qtbot.mouseMove(widget.dl_label, widget.dl_label.rect().center())
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    grip_position = QtCore.QPoint(widget.width() - 2, widget.height() - 2)
+    qtbot.mouseMove(widget, grip_position)
+    qtbot.mousePress(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        grip_position,
+    )
+    initial_size = widget.size()
+    qtbot.mouseMove(
+        widget,
+        QtCore.QPoint(initial_size.width() + 10, initial_size.height() + 10),
+    )
+    assert widget.size().width() > initial_size.width()
+    assert widget.size().height() > initial_size.height()
+    qtbot.mouseRelease(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(widget.width() - 2, widget.height() - 2),
+    )
+    assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+
 def test_always_on_top_toggle_cycles_persist_and_reshow_overlay(
     tmp_path, qtbot, monkeypatch
 ):

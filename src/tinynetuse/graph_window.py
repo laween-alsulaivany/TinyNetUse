@@ -35,6 +35,8 @@ class GraphWindow(QtWidgets.QDialog):
         base = Qt.FramelessWindowHint | Qt.Dialog
         flags = base | (Qt.WindowStaysOnTopHint if d.get("graph_always_on_top") else 0)
 
+        # Needed to show the resize cursor before the user presses the mouse.
+        self.setMouseTracking(True)
         # Match main widget opacity
         self.setWindowOpacity(d.get("graph_opacity", d.get("opacity", 1.0)))
         self.setWindowFlags(flags)
@@ -292,32 +294,34 @@ class GraphWindow(QtWidgets.QDialog):
                     e.globalPosition().toPoint() - self.frameGeometry().topLeft()
                 )
 
-    def mouseMoveEvent(self, e):
+    def _update_cursor_for_position(self, pos):
         grip_size = 16
-        pos = e.position()
         in_grip_area = (
             self.width() - grip_size < pos.x() < self.width()
             and self.height() - grip_size < pos.y() < self.height()
         )
+        self.setCursor(Qt.SizeFDiagCursor if in_grip_area else Qt.ArrowCursor)
+
+    def mouseMoveEvent(self, e):
+        pos = e.position()
         if self._resizing:
             start_pos, geom = self._resize_start
             global_pos = e.globalPosition().toPoint()
             dx = global_pos.x() - start_pos.x()
             dy = global_pos.y() - start_pos.y()
             self.resize(max(200, geom.width() + dx), max(100, geom.height() + dy))
-        elif in_grip_area:
             self.setCursor(Qt.SizeFDiagCursor)
-        elif self._drag_offset and not self.locked:
-            self.move(e.globalPosition().toPoint() - self._drag_offset)
-            self.setCursor(Qt.ClosedHandCursor)
         else:
-            self.setCursor(Qt.ArrowCursor)
+            self._update_cursor_for_position(pos)
+            if self._drag_offset and not self.locked:
+                self.move(e.globalPosition().toPoint() - self._drag_offset)
 
     def mouseReleaseEvent(self, e):
         if self._resizing:
             self._resizing = False
         if self._drag_offset:
             self._drag_offset = None
+        self._update_cursor_for_position(e.position())
         # save geometry
         g = self.geometry()
         self.config.data["graph_geometry"] = [g.x(), g.y(), g.width(), g.height()]

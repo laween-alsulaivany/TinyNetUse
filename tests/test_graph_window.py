@@ -1,7 +1,8 @@
 from unittest.mock import Mock
 
 import pytest
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtCore import Qt
 
 from tinynetuse.config import Config
 from tinynetuse.graph_window import GraphWindow
@@ -42,6 +43,57 @@ def test_graph_uses_its_own_opacity_preference(tmp_path, qtbot):
     graph.apply_settings()
 
     assert graph.windowOpacity() == pytest.approx(0.7, abs=1 / 255)
+
+
+def test_graph_uses_resize_cursor_only_in_the_resize_area(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.resize(320, 200)
+    graph.show()
+    qtbot.waitExposed(graph)
+
+    qtbot.mouseMove(graph, QtCore.QPoint(20, 20))
+    assert graph.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    qtbot.mousePress(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(20, 20),
+    )
+    qtbot.mouseMove(graph, QtCore.QPoint(25, 25))
+    assert graph.cursor().shape() == Qt.CursorShape.ArrowCursor
+    qtbot.mouseRelease(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(25, 25),
+    )
+
+    qtbot.mouseMove(graph, QtCore.QPoint(graph.width() - 2, graph.height() - 2))
+    assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+    grip_position = QtCore.QPoint(graph.width() - 2, graph.height() - 2)
+    qtbot.mousePress(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        grip_position,
+    )
+    initial_size = graph.size()
+    qtbot.mouseMove(
+        graph,
+        QtCore.QPoint(initial_size.width() + 10, initial_size.height() + 10),
+    )
+    assert graph.size().width() > initial_size.width()
+    assert graph.size().height() > initial_size.height()
+    qtbot.mouseRelease(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(graph.width() - 2, graph.height() - 2),
+    )
+    assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
 
 
 def test_graph_history_is_cleared_when_network_source_changes(tmp_path, qtbot):

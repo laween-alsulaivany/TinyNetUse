@@ -49,6 +49,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         self.resize(OVERLAY_DEFAULT_SIZE)
         base_flags = Qt.FramelessWindowHint | Qt.Tool
         self.setWindowFlags(base_flags | (Qt.WindowStaysOnTopHint if d.get("widget_always_on_top") else 0))
+        # Needed to show the resize cursor before the user presses the mouse.
+        self.setMouseTracking(True)
         self.setWindowOpacity(d.get("opacity", 1.0))
         self.always_on_top = d.get("widget_always_on_top", True)
 
@@ -73,6 +75,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             # Dynamic initial color
             lbl.setStyleSheet(f"color: {d.get('font_color', 'white')}")
             layout.addWidget(lbl)
+            lbl.setMouseTracking(True)
+            lbl.installEventFilter(self)
 
         self.sampler = NetworkSampler(d.get("network_adapter", "auto"))
         if d.get("network_adapter") != self.sampler.selected_adapter:
@@ -419,6 +423,28 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 self.show()
         self.setCursor(Qt.ArrowCursor)
 
+    def _update_cursor_for_position(self, pos):
+        grip_size = 16
+        in_grip_area = (
+            self.width() - grip_size < pos.x() < self.width()
+            and self.height() - grip_size < pos.y() < self.height()
+        )
+        self.setCursor(Qt.SizeFDiagCursor if in_grip_area else Qt.ArrowCursor)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Type.MouseMove and isinstance(
+            event, QtGui.QMouseEvent
+        ):
+            if watched is self.dl_label:
+                self._update_cursor_for_position(
+                    self.dl_label.mapTo(self, event.position().toPoint())
+                )
+            elif watched is self.ul_label:
+                self._update_cursor_for_position(
+                    self.ul_label.mapTo(self, event.position().toPoint())
+                )
+        return super().eventFilter(watched, event)
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
             grip = 16
@@ -434,12 +460,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 )
 
     def mouseMoveEvent(self, e):
-        grip_size = 16
         pos = e.position()
-        in_grip_area = (
-            self.width() - grip_size < pos.x() < self.width()
-            and self.height() - grip_size < pos.y() < self.height()
-        )
 
         if self._resizing:
             global_pos = e.globalPosition().toPoint()
@@ -448,24 +469,22 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             new_w = max(self.minimumWidth(), self._resize_start_geom.width() + dx)
             new_h = max(self.minimumHeight(), self._resize_start_geom.height() + dy)
             self.resize(new_w, new_h)
-        elif in_grip_area:
             self.setCursor(Qt.SizeFDiagCursor)
-        elif not self.locked and self._drag_offset and (e.buttons() & Qt.LeftButton):
-            self.move(e.globalPosition().toPoint() - self._drag_offset)
-            self.setCursor(Qt.ClosedHandCursor)
         else:
-            self.setCursor(Qt.ArrowCursor)
+            self._update_cursor_for_position(pos)
+            if not self.locked and self._drag_offset and (e.buttons() & Qt.LeftButton):
+                self.move(e.globalPosition().toPoint() - self._drag_offset)
 
     def mouseReleaseEvent(self, e):
 
         # release the resizing flag and reset cursor
         self._resizing = False
-        self.setCursor(QtCore.Qt.ArrowCursor)
         self._resize_start_pos = None
         self._resize_start_geom = None
 
         if not self.locked:
             self._drag_offset = None
+        self._update_cursor_for_position(e.position())
         g = self.geometry()
         self.config.data["widget_geometry"] = [g.x(), g.y(), g.width(), g.height()]
         self.config.save()
