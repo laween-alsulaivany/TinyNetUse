@@ -231,11 +231,15 @@ The generated release notes can be edited on GitHub when a release needs hand-wr
 
 Before tagging, manually test the installer and portable package on 64-bit Windows 11. Check first install, upgrade from an older version, reinstalling the same version, downgrading from a newer version, silent installation, startup behavior, repeated launches, overlay recovery, and uninstall.
 
-### Future SignPath signing
+### Future code signing
 
-The release workflow currently names its intermediate artifact `unsigned-build-<version>`. SignPath belongs between the `build` and `package` jobs. The future signing job should sign both candidate EXE files and give the `package` job a new signed artifact. Packaging and SHA-256 generation stay after signing, so unsigned files cannot be mistaken for final signed assets.
+If code signing is added later, the signing step belongs between the `build`
+and `package` jobs. Both executable release candidates should be signed before
+packaging and SHA-256 generation so unsigned artifacts cannot accidentally be
+published as signed releases.
 
-Do not rename the unsigned artifact to imply that it is signed until the SignPath job and credentials are actually configured.
+Do not rename or describe an artifact as signed until a signing provider and
+release signing process are actually configured.
 
 ## Updating dependency pins
 

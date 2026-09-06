@@ -141,7 +141,7 @@ jobs:
           retention-days: 7
           compression-level: 0
 
-  # TODO: SignPath goes between the build and the package later.
+  # TODO: Future code signing belongs between build and package.
   package:
     needs: build
     runs-on: windows-2025

@@ -33,8 +33,6 @@ The portable download runs without installation. Keep `portable.flag` beside `Ti
 
 Neither download requires Python.
 
-TinyNetUse is applying to use SignPath Foundation for code signing of official Windows releases. See the [Code signing policy](#code-signing-policy) for details.
-
 Current release builds are not yet code-signed, so Windows SmartScreen may show a warning when you first run them.
 
 ## Features
@@ -91,9 +89,7 @@ TinyNetUse is open source under the [MIT License](LICENSE).
 
 ## Code signing policy
 
-See the [TinyNetUse Code signing policy](CODE_SIGNING_POLICY.md).
-
-Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+TinyNetUse releases are currently unsigned. See the [code signing policy](CODE_SIGNING_POLICY.md) for information about official builds and distribution.
 
 ## Development
 
