@@ -128,6 +128,79 @@ def test_overlay_visibility_toggle_changes_a_real_widget(
     assert widget.isVisible()
 
 
+def test_always_on_top_toggle_cycles_persist_and_reshow_overlay(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+
+    for enabled in (False, True, False, True):
+        widget.toggle_always_on_top(enabled)
+
+        assert widget.isVisible()
+        assert widget.always_on_top is enabled
+        assert bool(widget.windowFlags() & Qt.WindowStaysOnTopHint) is enabled
+        assert Config(tmp_path / "config.json").data["widget_always_on_top"] is enabled
+
+
+def test_always_on_top_reshows_hidden_overlay_from_normal_and_tray_paths(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.toggle_always_on_top(True)
+    assert widget.isVisible()
+
+    widget.hide()
+    assert not widget.isVisible()
+    widget.show_overlay()
+
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+
+    widget.hide()
+    assert not widget.isVisible()
+    widget._on_tray_activated(QtWidgets.QSystemTrayIcon.ActivationReason.Trigger)
+
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+
+
+def test_always_on_top_and_click_through_preserve_both_window_flags(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+    widget.toggle_click_through(True)
+
+    widget.toggle_always_on_top(True)
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+    assert widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
+
+    widget.toggle_always_on_top(False)
+
+    assert widget.isVisible()
+    assert not widget.windowFlags() & Qt.WindowStaysOnTopHint
+    assert widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
+
+
 def test_click_through_overlay_persists_and_allows_input_again(
     tmp_path, qtbot, monkeypatch
 ):
