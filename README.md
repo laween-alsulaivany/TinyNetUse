@@ -43,6 +43,7 @@ Current release builds are not yet code-signed, so Windows SmartScreen may show 
 - Movable and resizable overlay with position locking and always-on-top mode
 - Configurable font, colors, opacity, precision, update interval, and download/upload highlight thresholds
 - System tray controls and an optional launch-at-Windows-startup setting
+- Manual update checks from About TinyNetUse
 
 ## Basic usage
 
@@ -73,7 +74,7 @@ The settings window groups Application, Widget, and Graph controls for monitorin
 
 ## Privacy and network behavior
 
-TinyNetUse reads the network byte counters provided by Windows to calculate current speeds. It does not inspect packet contents, send telemetry, or collect usage data. Project and release links open GitHub in your default browser only when you select them.
+TinyNetUse reads the network byte counters provided by Windows to calculate current speeds. It does not inspect packet contents, send telemetry, or collect usage data. Project and release links open GitHub in your default browser only when you select them. Selecting Check for Updates in About TinyNetUse manually asks GitHub for the latest release; TinyNetUse never checks automatically.
 
 In Auto mode, TinyNetUse asks Windows which adapter owns the best network route. This is a local route lookup and does not send a packet. If Windows cannot provide a matching adapter, TinyNetUse totals all active adapters that have a usable non-loopback IP address. This fallback can include physical, VPN, and virtual adapters, so layered traffic may be counted more than once. TinyNetUse is not an exact ISP bandwidth accounting tool.
 
