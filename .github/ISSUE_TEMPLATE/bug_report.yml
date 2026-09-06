@@ -39,6 +39,14 @@ body:
       required: true
 
   - type: textarea
+    id: activity
+    attributes:
+      label: What were you doing?
+      description: Describe what you were trying to accomplish when the problem occurred.
+    validations:
+      required: true
+
+  - type: textarea
     id: problem
     attributes:
       label: What happened?

@@ -7,6 +7,7 @@ from tinynetuse.version import __version__
 
 PROJECT_URL = "https://github.com/laween-alsulaivany/TinyNetUse"
 RELEASES_URL = f"{PROJECT_URL}/releases"
+REPORT_BUG_URL = f"{PROJECT_URL}/issues/new?template=bug_report.yml"
 QT_FOR_PYTHON_URL = "https://doc.qt.io/qtforpython-6/"
 
 
@@ -64,7 +65,10 @@ class AboutDialog(QtWidgets.QDialog):
             f'<a href="{PROJECT_URL}">GitHub Repository</a>'
             " &nbsp;|&nbsp; "
             f'<a href="{RELEASES_URL}">View Releases</a>'
+            " &nbsp;|&nbsp; "
+            f'<a href="{REPORT_BUG_URL}">Report a Bug</a>'
         )
+        self.links_label.setWordWrap(True)
         self._enable_links(self.links_label)
         layout.addWidget(self.links_label)
 

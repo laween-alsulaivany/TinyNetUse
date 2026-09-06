@@ -7,6 +7,7 @@ from tinynetuse.about_dialog import (
     AboutDialog,
     PROJECT_URL,
     QT_FOR_PYTHON_URL,
+    REPORT_BUG_URL,
     RELEASES_URL,
 )
 from tinynetuse.version import __version__
@@ -41,6 +42,7 @@ def test_about_dialog_shows_project_information(qtbot):
     assert "License: MIT" in text
     assert PROJECT_URL in dialog.links_label.text()
     assert RELEASES_URL in dialog.links_label.text()
+    assert REPORT_BUG_URL in dialog.links_label.text()
     assert QT_FOR_PYTHON_URL in dialog.framework_label.text()
     assert "LGPLv3/GPLv3" in dialog.framework_label.text()
     assert dialog.links_label.openExternalLinks()
