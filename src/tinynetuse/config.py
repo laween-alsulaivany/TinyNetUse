@@ -15,8 +15,9 @@ from tinynetuse.units import AUTO_UNITS, SUPPORTED_UNITS
 
 APP_NAME = "TinyNetUse"
 CONFIG_FILENAME = "config.json"
-CONFIG_VERSION = 8
+CONFIG_VERSION = 10
 PORTABLE_MARKER = "portable.flag"
+GRAPH_STYLES = ("centered", "stacked", "overlay")
 
 DEFAULTS = {
     "config_version": CONFIG_VERSION,
@@ -33,12 +34,14 @@ DEFAULTS = {
     "graph_locked": False,
     "graph_always_on_top": True,
     "graph_history": 60,
+    "graph_style": "centered",
+    "graph_opacity": 0.8,
     "update_interval": 1.0,
     "opacity": 0.8,
     "reduce_opacity_on_hover": False,
     "alert_color": "#FF5555",
-    "download_color": "#4FC3F7",
-    "upload_color": "#FF8A65",
+    "download_color": "#2680EB",
+    "upload_color": "#D97706",
     "network_adapter": "auto",
     "unit": "auto",
     "auto_unit_minimum": "B/s",
@@ -108,6 +111,9 @@ def _migrate(data: dict) -> dict:
     if version < 4 and isinstance(migrated.get("notify_threshold"), dict):
         migrated["notify_threshold"].setdefault("upload", None)
 
+    if version < 10:
+        migrated["graph_opacity"] = migrated.get("opacity", 0.8)
+
     migrated["config_version"] = CONFIG_VERSION
 
     return migrated
@@ -147,6 +153,8 @@ def validate_config(data) -> dict:
 
     if _valid_int(data.get("graph_history"), 2, 3600):
         clean["graph_history"] = data["graph_history"]
+    if data.get("graph_style") in GRAPH_STYLES:
+        clean["graph_style"] = data["graph_style"]
 
     interval = data.get("update_interval")
     if _is_number(interval) and 0.1 <= interval <= 60:
@@ -155,6 +163,10 @@ def validate_config(data) -> dict:
     opacity = data.get("opacity")
     if _is_number(opacity) and 0.2 <= opacity <= 1:
         clean["opacity"] = opacity
+
+    graph_opacity = data.get("graph_opacity")
+    if _is_number(graph_opacity) and 0.2 <= graph_opacity <= 1:
+        clean["graph_opacity"] = graph_opacity
 
     if data.get("unit") in SUPPORTED_UNITS:
         clean["unit"] = data["unit"]

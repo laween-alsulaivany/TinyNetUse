@@ -22,6 +22,11 @@ OVERLAY_DEFAULT_SIZE = QtCore.QSize(140, 60)
 OVERLAY_MINIMUM_SIZE = QtCore.QSize(100, 40)
 HOVER_OPACITY = 0.25
 
+# row indicator bars live in the left margin, left of the label text
+ROW_INDICATOR_X = 6.0
+ROW_INDICATOR_WIDTH = 4.0
+ROW_INDICATOR_TEXT_GAP = 6.0
+
 
 def _asset_path(relative: str) -> str:
     # PyInstaller extracts bundled files to _MEIPASS.
@@ -44,6 +49,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         self.resize(OVERLAY_DEFAULT_SIZE)
         base_flags = Qt.FramelessWindowHint | Qt.Tool
         self.setWindowFlags(base_flags | (Qt.WindowStaysOnTopHint if d.get("widget_always_on_top") else 0))
+        # Needed to show the resize cursor before the user presses the mouse.
+        self.setMouseTracking(True)
         self.setWindowOpacity(d.get("opacity", 1.0))
         self.always_on_top = d.get("widget_always_on_top", True)
 
@@ -59,7 +66,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
 
         # ── Labels ──
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        left_margin = ROW_INDICATOR_X + ROW_INDICATOR_WIDTH + ROW_INDICATOR_TEXT_GAP
+        layout.setContentsMargins(int(left_margin), 8, 8, 8)
         layout.setSpacing(2)
         self.dl_label = QtWidgets.QLabel()
         self.ul_label = QtWidgets.QLabel()
@@ -67,6 +75,8 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             # Dynamic initial color
             lbl.setStyleSheet(f"color: {d.get('font_color', 'white')}")
             layout.addWidget(lbl)
+            lbl.setMouseTracking(True)
+            lbl.installEventFilter(self)
 
         self.sampler = NetworkSampler(d.get("network_adapter", "auto"))
         if d.get("network_adapter") != self.sampler.selected_adapter:
@@ -129,7 +139,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 self.graph_window = GraphWindow(parent=self, config=self.config)
                 self.graph_window.closed.connect(self._on_graph_closed)
             elif not self.graph_window.isVisible():
-                self.graph_window.clear_history()
+                self.graph_window.reset_for_reopen()
             self.graph_window.show()
             self.graph_window.raise_()
             self.graph_window.activateWindow()
@@ -314,37 +324,77 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             )
         )
 
-        self._alert_active = False
-        download_high = (
+        self._download_alert = (
             self.download_threshold is not None
             and recv_per_sec > self.download_threshold
         )
-        upload_high = (
+        self._upload_alert = (
             self.upload_threshold is not None
             and sent_per_sec > self.upload_threshold
         )
-        self._alert_active = download_high or upload_high
+        self._alert_active = self._download_alert or self._upload_alert
 
         self.update()  # for trigger repaint
 
     def paintEvent(self, event):
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 8.0, 8.0)
+        radius = 8.0
+        rect = QRectF(self.rect())
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing)
 
-        # Change background color based on alert state
+        # bg is always dark/translucent, alert_color is only ever an accent
+        bg_path = QtGui.QPainterPath()
+        bg_path.addRoundedRect(rect, radius, radius)
+        p.fillPath(bg_path, QtGui.QColor(0, 0, 0, 160))
+
         if getattr(self, "_alert_active", False):
-            bg_color = QtGui.QColor(self.alert_color)
-        else:
-            bg_color = QtGui.QColor(0, 0, 0, 160)
-        p.fillPath(path, bg_color)
+            self._paint_alert_border(p, rect, radius)
+        self._paint_row_indicators(p)
 
         # For Drag Handle
         p.setPen(QtGui.QPen(QtGui.QColor("#aaa")))
         size = 16
         for i in range(4, size, 4):
             p.drawLine(self.width() - i, self.height(), self.width(), self.height() - i)
+
+    def _paint_alert_border(self, p, rect, radius):
+        color = QtGui.QColor(self.alert_color)
+        border_rect = rect.adjusted(1.0, 1.0, -1.0, -1.0)
+        p.setBrush(Qt.NoBrush)
+
+        # glow: a few fading passes, widest/faintest first, corners get more overlap naturally
+        for width, alpha in ((6.0, 25), (4.0, 45), (2.0, 75)):
+            glow = QtGui.QColor(color)
+            glow.setAlpha(alpha)
+            p.setPen(QtGui.QPen(glow, width))
+            p.drawRoundedRect(border_rect, radius, radius)
+
+        # crisp rim on top
+        rim = QtGui.QColor(color)
+        rim.setAlpha(235)
+        p.setPen(QtGui.QPen(rim, 1.4))
+        p.drawRoundedRect(border_rect, radius, radius)
+
+    def _paint_row_indicators(self, p):
+        neutral_color = QtGui.QColor(70, 70, 70, 210)
+        alert_qcolor = QtGui.QColor(self.alert_color)
+
+        p.setPen(Qt.NoPen)
+        for label, active in (
+            (self.dl_label, getattr(self, "_download_alert", False)),
+            (self.ul_label, getattr(self, "_upload_alert", False)),
+        ):
+            # tied to font metrics, not label geometry, so resizing the widget doesn't stretch the bar
+            bar_height = label.fontMetrics().height() * 0.75
+            center_y = label.geometry().center().y()
+            bar_rect = QRectF(
+                ROW_INDICATOR_X,
+                center_y - bar_height / 2,
+                ROW_INDICATOR_WIDTH,
+                bar_height,
+            )
+            p.setBrush(alert_qcolor if active else neutral_color)
+            p.drawRoundedRect(bar_rect, ROW_INDICATOR_WIDTH / 2, ROW_INDICATOR_WIDTH / 2)
 
     def enterEvent(self, event):
         self._pointer_over_overlay = True
@@ -373,6 +423,28 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 self.show()
         self.setCursor(Qt.ArrowCursor)
 
+    def _update_cursor_for_position(self, pos):
+        grip_size = 16
+        in_grip_area = (
+            self.width() - grip_size < pos.x() < self.width()
+            and self.height() - grip_size < pos.y() < self.height()
+        )
+        self.setCursor(Qt.SizeFDiagCursor if in_grip_area else Qt.ArrowCursor)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Type.MouseMove and isinstance(
+            event, QtGui.QMouseEvent
+        ):
+            if watched is self.dl_label:
+                self._update_cursor_for_position(
+                    self.dl_label.mapTo(self, event.position().toPoint())
+                )
+            elif watched is self.ul_label:
+                self._update_cursor_for_position(
+                    self.ul_label.mapTo(self, event.position().toPoint())
+                )
+        return super().eventFilter(watched, event)
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and not self.locked:
             grip = 16
@@ -388,12 +460,7 @@ class TinyNetUseWidget(QtWidgets.QWidget):
                 )
 
     def mouseMoveEvent(self, e):
-        grip_size = 16
         pos = e.position()
-        in_grip_area = (
-            self.width() - grip_size < pos.x() < self.width()
-            and self.height() - grip_size < pos.y() < self.height()
-        )
 
         if self._resizing:
             global_pos = e.globalPosition().toPoint()
@@ -402,24 +469,22 @@ class TinyNetUseWidget(QtWidgets.QWidget):
             new_w = max(self.minimumWidth(), self._resize_start_geom.width() + dx)
             new_h = max(self.minimumHeight(), self._resize_start_geom.height() + dy)
             self.resize(new_w, new_h)
-        elif in_grip_area:
             self.setCursor(Qt.SizeFDiagCursor)
-        elif not self.locked and self._drag_offset and (e.buttons() & Qt.LeftButton):
-            self.move(e.globalPosition().toPoint() - self._drag_offset)
-            self.setCursor(Qt.ClosedHandCursor)
         else:
-            self.setCursor(Qt.ArrowCursor)
+            self._update_cursor_for_position(pos)
+            if not self.locked and self._drag_offset and (e.buttons() & Qt.LeftButton):
+                self.move(e.globalPosition().toPoint() - self._drag_offset)
 
     def mouseReleaseEvent(self, e):
 
         # release the resizing flag and reset cursor
         self._resizing = False
-        self.setCursor(QtCore.Qt.ArrowCursor)
         self._resize_start_pos = None
         self._resize_start_geom = None
 
         if not self.locked:
             self._drag_offset = None
+        self._update_cursor_for_position(e.position())
         g = self.geometry()
         self.config.data["widget_geometry"] = [g.x(), g.y(), g.width(), g.height()]
         self.config.save()
@@ -460,23 +525,26 @@ class TinyNetUseWidget(QtWidgets.QWidget):
         graph.setChecked(self.graph_visible)
         graph.triggered.connect(self.toggle_graph)
 
-        atop = menu.addAction("Always On Top")
+        overlay_options = QtWidgets.QMenu("Overlay Options", menu)
+        menu.addMenu(overlay_options)
+
+        atop = overlay_options.addAction("Always On Top")
         atop.setCheckable(True)
         atop.setChecked(self.always_on_top)
         atop.triggered.connect(self.toggle_always_on_top)
 
-        lock = menu.addAction("Lock Position")
+        lock = overlay_options.addAction("Lock Position")
         lock.setCheckable(True)
         lock.setChecked(self.locked)
         lock.triggered.connect(self.toggle_lock)
 
-        click_through = menu.addAction("Click Through Overlay")
+        click_through = overlay_options.addAction("Click Through Overlay")
         click_through.setCheckable(True)
         click_through.setChecked(self.click_through_overlay)
         click_through.triggered.connect(self.toggle_click_through)
 
         menu.addAction("Settings", self.open_settings)
-        menu.addAction("Reset Window Positions", self.reset_window_positions)
+        overlay_options.addAction("Reset Window Positions", self.reset_window_positions)
         menu.addAction("About TinyNetUse", self.open_about)
         menu.addSeparator()
         menu.addAction("Quit", QtWidgets.QApplication.quit)

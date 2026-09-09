@@ -10,6 +10,18 @@ from tinynetuse.app import TinyNetUseWidget
 from tinynetuse.config import Config
 
 
+def send_mouse_move(widget, position):
+    event = QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseMove,
+        QtCore.QPointF(position),
+        QtCore.QPointF(widget.mapToGlobal(position)),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
+
+
 class StubSampler:
     def __init__(self, samples):
         self.selected_adapter = "Ethernet"
@@ -31,7 +43,7 @@ def make_widget(tmp_path, qtbot, monkeypatch, samples):
             "network_adapter": "Ethernet",
             "unit": "MB/s",
             "precision": 1,
-            "notify_threshold": {"download": 1, "upload": None},
+            "notify_threshold": {"download": 1, "upload": 5},
             "alert_color": "#123456",
         }
     )
@@ -80,19 +92,24 @@ def test_main_menu_is_short_and_logically_ordered(qtbot):
     assert menu_labels(menu) == [
         "Hide Overlay",
         "Show Graph",
-        "Always On Top",
-        "Lock Position",
-        "Click Through Overlay",
+        "Overlay Options",
         "Settings",
-        "Reset Window Positions",
         "About TinyNetUse",
         "<separator>",
         "Quit",
     ]
     assert menu.actions()[1].isChecked()
-    assert not menu.actions()[2].isChecked()
-    assert menu.actions()[3].isChecked()
-    assert not menu.actions()[4].isChecked()
+    overlay_options = menu.actions()[2].menu()
+    assert isinstance(overlay_options, QtWidgets.QMenu)
+    assert menu_labels(overlay_options) == [
+        "Always On Top",
+        "Lock Position",
+        "Click Through Overlay",
+        "Reset Window Positions",
+    ]
+    assert not overlay_options.actions()[0].isChecked()
+    assert overlay_options.actions()[1].isChecked()
+    assert not overlay_options.actions()[2].isChecked()
 
 
 def test_menu_offers_show_when_overlay_is_hidden(qtbot):
@@ -121,6 +138,135 @@ def test_overlay_visibility_toggle_changes_a_real_widget(
 
     widget.toggle_overlay_visibility()
     assert widget.isVisible()
+
+
+def test_overlay_uses_resize_cursor_only_in_the_resize_area(
+    tmp_path, qtbot, monkeypatch
+):
+    resize_inset = 8
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.resize(140, 60)
+    widget.show()
+    qtbot.waitExposed(widget)
+
+    send_mouse_move(widget, QtCore.QPoint(20, 20))
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    send_mouse_move(
+        widget,
+        QtCore.QPoint(widget.width() - resize_inset, widget.height() - resize_inset),
+    )
+    assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+    send_mouse_move(widget.dl_label, widget.dl_label.rect().center())
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    grip_position = QtCore.QPoint(
+        widget.width() - resize_inset,
+        widget.height() - resize_inset,
+    )
+    send_mouse_move(widget, grip_position)
+    qtbot.mousePress(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        grip_position,
+    )
+    initial_size = widget.size()
+    qtbot.mouseMove(
+        widget,
+        QtCore.QPoint(initial_size.width() + 10, initial_size.height() + 10),
+    )
+    assert widget.size().width() > initial_size.width()
+    assert widget.size().height() > initial_size.height()
+    qtbot.mouseRelease(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(
+            widget.width() - resize_inset,
+            widget.height() - resize_inset,
+        ),
+    )
+    assert widget.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+
+def test_always_on_top_toggle_cycles_persist_and_reshow_overlay(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+
+    for enabled in (False, True, False, True):
+        widget.toggle_always_on_top(enabled)
+
+        assert widget.isVisible()
+        assert widget.always_on_top is enabled
+        assert bool(widget.windowFlags() & Qt.WindowStaysOnTopHint) is enabled
+        assert Config(tmp_path / "config.json").data["widget_always_on_top"] is enabled
+
+
+def test_always_on_top_reshows_hidden_overlay_from_normal_and_tray_paths(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.toggle_always_on_top(True)
+    assert widget.isVisible()
+
+    widget.hide()
+    assert not widget.isVisible()
+    widget.show_overlay()
+
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+
+    widget.hide()
+    assert not widget.isVisible()
+    widget._on_tray_activated(QtWidgets.QSystemTrayIcon.ActivationReason.Trigger)
+
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+
+
+def test_always_on_top_and_click_through_preserve_both_window_flags(
+    tmp_path, qtbot, monkeypatch
+):
+    widget, _ = make_widget(
+        tmp_path,
+        qtbot,
+        monkeypatch,
+        [(0, 0), (0, 0)],
+    )
+    widget.show()
+    qtbot.waitUntil(widget.isVisible)
+    widget.toggle_click_through(True)
+
+    widget.toggle_always_on_top(True)
+    assert widget.isVisible()
+    assert widget.windowFlags() & Qt.WindowStaysOnTopHint
+    assert widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
+
+    widget.toggle_always_on_top(False)
+
+    assert widget.isVisible()
+    assert not widget.windowFlags() & Qt.WindowStaysOnTopHint
+    assert widget.windowFlags() & Qt.WindowType.WindowTransparentForInput
 
 
 def test_click_through_overlay_persists_and_allows_input_again(
@@ -207,11 +353,13 @@ def test_reopening_graph_reuses_and_clears_the_real_window(
     assert graph.last_ul == 100
     assert graph.last_dl == 250
 
+    graph._toggle_pause(True)
     widget.toggle_graph(False)
     widget.toggle_graph(True)
 
     assert widget.graph_window is graph
     assert graph.isVisible()
+    assert not graph.paused
     assert not any(graph.sent_hist)
     assert not any(graph.recv_hist)
 
@@ -238,10 +386,25 @@ def test_overlay_updates_labels_graph_and_alert_rendering(
     assert widget.ul_label.text() == f"{chr(0x2191)} 1.0 MB/s"
     assert graph.last_dl == 2_097_152
     assert graph.last_ul == 1_048_576
+    # download is over its 1 MB/s threshold, upload (5 MB/s) isn't
     assert widget._alert_active
-    assert widget.grab().toImage().pixelColor(120, 100) == QtGui.QColor(
-        "#123456"
-    )
+    assert widget._download_alert
+    assert not widget._upload_alert
+
+    widget.timer.stop()  # a stray tick here would drain the stub sampler
+
+    # alert_color should only tint the download indicator, not the whole overlay
+    image = widget.grab().toImage()
+    dpr = image.devicePixelRatio()
+
+    def pixel_at(x, y):
+        return image.pixelColor(round(x * dpr), round(y * dpr))
+
+    dl_center_y = widget.dl_label.geometry().center().y()
+    ul_center_y = widget.ul_label.geometry().center().y()
+    indicator_x = app_module.ROW_INDICATOR_X + app_module.ROW_INDICATOR_WIDTH / 2
+    assert pixel_at(indicator_x, dl_center_y) == QtGui.QColor("#123456")
+    assert pixel_at(indicator_x, ul_center_y) != QtGui.QColor("#123456")
 
 
 def test_overlay_auto_unit_respects_the_configured_minimum(

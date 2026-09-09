@@ -1,12 +1,18 @@
 """TinyNetUse About dialog."""
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
+from tinynetuse.update_check import (
+    CheckStatus,
+    LATEST_RELEASE_PAGE_URL,
+    UpdateChecker,
+)
 from tinynetuse.version import __version__
 
 
 PROJECT_URL = "https://github.com/laween-alsulaivany/TinyNetUse"
 RELEASES_URL = f"{PROJECT_URL}/releases"
+REPORT_BUG_URL = f"{PROJECT_URL}/issues/new?template=bug_report.yml"
 QT_FOR_PYTHON_URL = "https://doc.qt.io/qtforpython-6/"
 
 
@@ -64,7 +70,10 @@ class AboutDialog(QtWidgets.QDialog):
             f'<a href="{PROJECT_URL}">GitHub Repository</a>'
             " &nbsp;|&nbsp; "
             f'<a href="{RELEASES_URL}">View Releases</a>'
+            " &nbsp;|&nbsp; "
+            f'<a href="{REPORT_BUG_URL}">Report a Bug</a>'
         )
+        self.links_label.setWordWrap(True)
         self._enable_links(self.links_label)
         layout.addWidget(self.links_label)
 
@@ -83,6 +92,13 @@ class AboutDialog(QtWidgets.QDialog):
         self.buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close
         )
+        self.check_updates_button = self.buttons.addButton(
+            "Check for Updates",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.update_checker = UpdateChecker(__version__, self)
+        self.check_updates_button.clicked.connect(self._check_for_updates)
+        self.update_checker.finished.connect(self._show_update_result)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
 
@@ -92,3 +108,46 @@ class AboutDialog(QtWidgets.QDialog):
             QtCore.Qt.TextInteractionFlag.TextBrowserInteraction
         )
         label.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+
+    def _check_for_updates(self):
+        if self.update_checker.check():
+            self.check_updates_button.setEnabled(False)
+
+    def _show_update_result(self, result):
+        self.check_updates_button.setEnabled(True)
+        if not self.isVisible():
+            return
+
+        if result.status is CheckStatus.UP_TO_DATE:
+            QtWidgets.QMessageBox.information(
+                self, "Update Check", "TinyNetUse is up to date."
+            )
+        elif result.status is CheckStatus.UPDATE_AVAILABLE:
+            message = QtWidgets.QMessageBox(self)
+            message.setWindowTitle("Update Available")
+            message.setText(f"Version {result.version} is available.")
+            open_releases = message.addButton(
+                "Open Releases", QtWidgets.QMessageBox.ButtonRole.ActionRole
+            )
+            message.addButton(QtWidgets.QMessageBox.StandardButton.Close)
+            message.exec()
+            if message.clickedButton() is open_releases:
+                QtGui.QDesktopServices.openUrl(
+                    QtCore.QUrl(LATEST_RELEASE_PAGE_URL)
+                )
+        elif result.status is CheckStatus.NETWORK_ERROR:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Update Check",
+                "Unable to check for updates. Check your connection and try again.",
+            )
+        else:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Update Check",
+                "GitHub could not complete the update check. Try again later.",
+            )
+
+    def done(self, result):
+        self.update_checker.cancel()
+        super().done(result)

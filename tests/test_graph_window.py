@@ -1,9 +1,23 @@
 from unittest.mock import Mock
 
-from PySide6 import QtWidgets
+import pytest
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt
 
 from tinynetuse.config import Config
 from tinynetuse.graph_window import GraphWindow
+
+
+def send_mouse_move(widget, position):
+    event = QtGui.QMouseEvent(
+        QtCore.QEvent.Type.MouseMove,
+        QtCore.QPointF(position),
+        QtCore.QPointF(widget.mapToGlobal(position)),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QtWidgets.QApplication.sendEvent(widget, event)
 
 
 def test_graph_uses_samples_supplied_by_the_main_monitor(tmp_path, qtbot):
@@ -21,6 +35,74 @@ def test_graph_uses_samples_supplied_by_the_main_monitor(tmp_path, qtbot):
     assert graph.last_dl == 250
 
 
+def test_new_graph_uses_cobalt_download_and_amber_upload(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+
+    assert graph.line_dl.name() == "#2680eb"
+    assert graph.line_ul.name() == "#d97706"
+
+
+def test_graph_uses_its_own_opacity_preference(tmp_path, qtbot):
+    config = Config(tmp_path / "config.json")
+    config.data.update({"opacity": 0.6, "graph_opacity": 0.9})
+    graph = GraphWindow(config=config)
+    qtbot.addWidget(graph)
+
+    assert graph.windowOpacity() == pytest.approx(0.9, abs=1 / 255)
+
+    config.data.update({"opacity": 0.2, "graph_opacity": 0.7})
+    graph.apply_settings()
+
+    assert graph.windowOpacity() == pytest.approx(0.7, abs=1 / 255)
+
+
+def test_graph_uses_resize_cursor_only_in_the_resize_area(tmp_path, qtbot):
+    resize_inset = 8
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.resize(320, 200)
+    graph.show()
+    qtbot.waitExposed(graph)
+
+    send_mouse_move(graph, QtCore.QPoint(20, 20))
+    assert graph.cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    send_mouse_move(
+        graph,
+        QtCore.QPoint(graph.width() - resize_inset, graph.height() - resize_inset),
+    )
+    assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+    grip_position = QtCore.QPoint(
+        graph.width() - resize_inset,
+        graph.height() - resize_inset,
+    )
+    qtbot.mousePress(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        grip_position,
+    )
+    initial_size = graph.size()
+    qtbot.mouseMove(
+        graph,
+        QtCore.QPoint(initial_size.width() + 10, initial_size.height() + 10),
+    )
+    assert graph.size().width() > initial_size.width()
+    assert graph.size().height() > initial_size.height()
+    qtbot.mouseRelease(
+        graph,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QtCore.QPoint(
+            graph.width() - resize_inset,
+            graph.height() - resize_inset,
+        ),
+    )
+    assert graph.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+
+
 def test_graph_history_is_cleared_when_network_source_changes(tmp_path, qtbot):
     graph = GraphWindow(config=Config(tmp_path / "config.json"))
     qtbot.addWidget(graph)
@@ -32,6 +114,58 @@ def test_graph_history_is_cleared_when_network_source_changes(tmp_path, qtbot):
     assert not any(graph.recv_hist)
     assert graph.last_ul == 0
     assert graph.last_dl == 0
+    assert not graph.has_samples
+
+
+def test_paused_graph_keeps_its_samples_and_resets_when_reopened(
+    tmp_path, qtbot
+):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.add_sample(100, 250)
+
+    graph._toggle_pause(True)
+    graph.add_sample(200, 500)
+
+    assert graph.paused
+    assert graph.last_ul == 100
+    assert graph.last_dl == 250
+
+    graph.reset_for_reopen()
+
+    assert not graph.paused
+    assert not graph.has_samples
+    assert not any(graph.sent_hist)
+    assert not any(graph.recv_hist)
+
+
+def test_graph_waits_for_a_sample_before_plotting_history(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+
+    assert not graph.has_samples
+
+    graph.add_sample(0, 0)
+
+    assert graph.has_samples
+
+
+def test_graph_renders_waiting_and_sampled_states(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.resize(320, 200)
+    graph.show()
+    qtbot.waitExposed(graph)
+
+    waiting_image = graph.grab().toImage()
+    graph.add_sample(100, 250)
+    sampled_image = graph.grab().toImage()
+
+    assert waiting_image.width() == graph.width() * waiting_image.devicePixelRatio()
+    assert waiting_image.height() == graph.height() * waiting_image.devicePixelRatio()
+    assert sampled_image.width() == graph.width() * sampled_image.devicePixelRatio()
+    assert sampled_image.height() == graph.height() * sampled_image.devicePixelRatio()
+    assert waiting_image != sampled_image
 
 
 def test_graph_resizes_history_without_discarding_recent_samples(
@@ -101,6 +235,37 @@ def test_graph_auto_unit_respects_the_configured_minimum(tmp_path, qtbot):
     graph.add_sample(100, 500)
 
     assert graph._display_unit() == "KB/s"
+
+
+def test_graph_styles_map_download_and_upload_to_the_expected_lanes(
+    tmp_path, qtbot
+):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+
+    graph.graph_style = "centered"
+    assert graph._value_to_y(10, 10, 10, 100, "download") == 10
+    assert graph._value_to_y(10, 10, 10, 100, "upload") == 110
+
+    graph.graph_style = "stacked"
+    assert graph._value_to_y(10, 10, 10, 100, "download") == 10
+    assert graph._value_to_y(10, 10, 10, 100, "upload") == 60
+
+    graph.graph_style = "overlay"
+    assert graph._value_to_y(10, 10, 10, 100, "download") == 10
+    assert graph._value_to_y(10, 10, 10, 100, "upload") == 10
+
+
+def test_centered_graph_scale_labels_show_positive_upload_rates(tmp_path, qtbot):
+    graph = GraphWindow(config=Config(tmp_path / "config.json"))
+    qtbot.addWidget(graph)
+    graph.graph_style = "centered"
+
+    assert graph._scale_labels(2.5, "MB/s") == (
+        (0.0, "2.5 MB/s"),
+        (0.5, "0.0 MB/s"),
+        (1.0, "2.5 MB/s"),
+    )
 
 
 def test_graph_close_notifies_owner_without_saving_twice(tmp_path, qtbot):
